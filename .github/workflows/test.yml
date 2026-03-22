@@ -1,0 +1,64 @@
+name: CPQ Test Run
+
+on:
+  workflow_dispatch:
+    inputs:
+      vins:
+        description: "Comma-separated Vehicle Identification Numbers"
+        required: true
+        type: string
+      language:
+        description: "Test language (en or de)"
+        required: true
+        type: string
+      run_id:
+        description: "Test run UUID (from the app database)"
+        required: true
+        type: string
+
+jobs:
+  run-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install Playwright
+        run: npm install playwright
+
+      - name: Cache Playwright browser
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-chromium-${{ hashFiles('package-lock.json') }}
+
+      - name: Install Playwright browser
+        run: npx playwright install chromium --with-deps
+
+      - name: Run CPQ test
+        env:
+          VINS: ${{ inputs.vins }}
+          LANGUAGE: ${{ inputs.language }}
+          RUN_ID: ${{ inputs.run_id }}
+          TEST_USERNAME: ${{ secrets.TEST_USERNAME }}
+          TEST_PASSWORD: ${{ secrets.TEST_PASSWORD }}
+          WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
+          WEBHOOK_SECRET: ${{ secrets.WEBHOOK_SECRET }}
+          BLOB_READ_WRITE_TOKEN: ${{ secrets.BLOB_READ_WRITE_TOKEN }}
+        run: node tests/cpq-test.mjs
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots
+          path: "*.png"
+          if-no-files-found: ignore

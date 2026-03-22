@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cd \"C:/DATA/Coding Projects/CPQ Webtester\" && npx create-next-app@latest . --typescript --tailwind --eslint --app --src-dir --import-alias \"@/*\" --no-git 2>&1)",
+      "Bash(cd \"C:/DATA/Coding Projects\" && printf 'n\\\\n' | npx create-next-app@latest cpq-webtester-tmp --typescript --tailwind --eslint --app --src-dir --import-alias \"@/*\" --no-git 2>&12)",
+      "Bash(cp:*)",
+      "Bash(cd \"C:/DATA/Coding Projects/CPQ Webtester\" && npm install @vercel/postgres jose 2>&1)",
+      "Bash(cd \"C:/DATA/Coding Projects/CPQ Webtester\" && npm run build 2>&1)",
+      "Bash(cd \"C:/DATA/Coding Projects/CPQ Webtester\" && npm run dev 2>&1)",
+      "Bash(curl:*)",
+      "Bash(vercel --version 2>&1 && git --version 2>&1)",
+      "Bash(git:*)",
+      "Bash(npm install:*)",
+      "Bash(vercel:*)",
+      "Bash(openssl rand:*)",
+      "Bash(cd \"C:/DATA/Coding Projects/CPQ Webtester\" && printf '%s' 'Agco2022!' | vercel env add APP_PASSWORD production 2>&1 && printf '%s' 'Agco2022!' | vercel env add APP_PASSWORD preview 2>&1)",
+      "Bash(taskkill /PID 20804 /F 2>&1 && sleep 2 && cd \"C:/DATA/Coding Projects/CPQ Webtester\" && npm run dev 2>&1)",
+      "Bash(kill 20804 2>&1 || true && sleep 2 && cd \"C:/DATA/Coding Projects/CPQ Webtester\" && npm run dev 2>&1)",
+      "Bash(cd \"C:/DATA/Coding Projects/CPQ Webtester\" && node --env-file=.env.local scripts/migrate.mjs 2>&1)",
+      "Bash(cd \"C:/DATA/Coding Projects/CPQ Webtester\" && node --env-file=.env.local -e \"\nimport\\('@vercel/postgres'\\).then\\(\\({ sql }\\) =>\n  sql\\\\`SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' ORDER BY table_name\\\\`\n    .then\\(r => console.log\\('Tables:', r.rows.map\\(r => r.table_name\\).join\\(', '\\)\\)\\)\n\\)\" 2>&1)"
+    ]
+  }
+}

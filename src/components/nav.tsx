@@ -1,0 +1,57 @@
+"use client";
+
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
+import { C } from "@/lib/design";
+
+const links = [
+  { href: "/scenarios", label: "Scenarios" },
+  { href: "/runs", label: "Runs" },
+];
+
+export function Nav() {
+  const pathname = usePathname();
+  const router = useRouter();
+
+  async function handleLogout() {
+    await fetch("/api/auth/logout", { method: "POST" });
+    router.push("/login");
+  }
+
+  return (
+    <nav
+      className="flex items-center gap-6 px-6 py-3"
+      style={{
+        background: C.surface,
+        borderBottom: `1px solid ${C.border}`,
+      }}
+    >
+      <span className="font-semibold" style={{ color: C.primary }}>
+        CPQ Webtester
+      </span>
+      <div className="flex flex-1 items-center gap-4">
+        {links.map(({ href, label }) => (
+          <Link
+            key={href}
+            href={href}
+            className="text-sm font-medium transition-colors"
+            style={{
+              color: pathname.startsWith(href) ? C.accent : C.secondary,
+            }}
+          >
+            {label}
+          </Link>
+        ))}
+      </div>
+      <button
+        onClick={handleLogout}
+        className="text-sm"
+        style={{ color: C.muted }}
+        onMouseEnter={(e) => { e.currentTarget.style.color = C.primary; }}
+        onMouseLeave={(e) => { e.currentTarget.style.color = C.muted; }}
+      >
+        Logout
+      </button>
+    </nav>
+  );
+}

@@ -1,0 +1,25 @@
+@import "tailwindcss";
+
+:root {
+  --background: #0d0d0d;
+  --foreground: #999999;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+}
+
+@keyframes fill-lr {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
