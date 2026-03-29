@@ -48,7 +48,9 @@ function Pagination({
   );
 }
 
-type VinRow = { vin: string; gc: GcOption };
+function parseVins(text: string): string[] {
+  return text.split(/[,\n]/).map(v => v.trim().toUpperCase()).filter(v => v.length > 0).slice(0, 10);
+}
 
 export default function ScenariosPage() {
   const [scenarios, setScenarios] = useState<Scenario[]>([]);
@@ -58,7 +60,8 @@ export default function ScenariosPage() {
   const perPage = 5;
 
   const [name, setName] = useState("");
-  const [vinRows, setVinRows] = useState<VinRow[]>([{ vin: "", gc: "Standard" }]);
+  const [vinText, setVinText] = useState("");
+  const [gcMap, setGcMap] = useState<Record<string, GcOption>>({});
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState("");
   const [gcDefault, setGcDefault] = useState<GcOption>("Standard");
@@ -85,37 +88,29 @@ export default function ScenariosPage() {
       .then((r) => r.json())
       .then((d) => {
         if (d.gc_default && GC_OPTIONS.includes(d.gc_default as GcOption)) {
-          const def = d.gc_default as GcOption;
-          setGcDefault(def);
-          setVinRows([{ vin: "", gc: def }]);
+          setGcDefault(d.gc_default as GcOption);
         }
       })
       .catch(() => {});
     fetchScenarios();
   }, []);
 
-  function addVinRow() {
-    if (vinRows.length >= 5) return;
-    setVinRows((rows) => [...rows, { vin: "", gc: gcDefault }]);
-  }
-
-  function updateVinRow(idx: number, field: keyof VinRow, value: string) {
-    setVinRows((rows) =>
-      rows.map((r, i) => i === idx ? { ...r, [field]: field === "vin" ? value.toUpperCase() : value } : r)
-    );
-  }
-
-  function removeVinRow(idx: number) {
-    if (vinRows.length <= 1) return;
-    setVinRows((rows) => rows.filter((_, i) => i !== idx));
+  function handleVinTextChange(val: string) {
+    setVinText(val);
+    const parsed = parseVins(val);
+    setGcMap(prev => {
+      const next: Record<string, GcOption> = {};
+      for (const vin of parsed) next[vin] = prev[vin] ?? gcDefault;
+      return next;
+    });
   }
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
     setFormError("");
-    const vins = vinRows.map((r) => r.vin.trim()).filter(Boolean);
+    const vins = parseVins(vinText);
     if (vins.length === 0) { setFormError("Enter at least one VIN"); return; }
-    const gc_options = vinRows.filter((r) => r.vin.trim()).map((r) => r.gc);
+    const gc_options = vins.map(v => gcMap[v] ?? gcDefault);
 
     setSubmitting(true);
     try {
@@ -129,7 +124,8 @@ export default function ScenariosPage() {
         throw new Error(data.error ?? "Failed to create scenario");
       }
       setName("");
-      setVinRows([{ vin: "", gc: gcDefault }]);
+      setVinText("");
+      setGcMap({});
       await fetchScenarios();
     } catch (err) {
       setFormError(err instanceof Error ? err.message : "Something went wrong");
@@ -183,7 +179,7 @@ export default function ScenariosPage() {
         CPQ NA Runner
       </h1>
       <p className="mb-4 flex-shrink-0" style={{ color: C.secondary, fontSize: 11, lineHeight: 1.5, maxWidth: 900 }}>
-        Enter up to 5 VINs per scenario. For each VIN select the Genuine Care type
+        Enter up to 10 VINs per scenario. For each VIN select the Genuine Care type
         (Annual, Standard, or Parts-Only). The bot will execute the full CPQ NA flow,
         download PDFs, and — for Stage + Order endpoint — place an order and capture the Order ID.
         Scenarios and Runs are automatically deleted after 30 days.
@@ -211,54 +207,46 @@ export default function ScenariosPage() {
             />
           </div>
 
-          {/* VIN rows */}
+          {/* VINs textarea + GC buttons */}
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
             <label className="text-[10px] font-medium uppercase tracking-wider" style={{ color: C.secondary }}>
               VINs &amp; Genuine Care
             </label>
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              {vinRows.map((row, idx) => (
-                <div key={idx} style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                  <input
-                    type="text"
-                    value={row.vin}
-                    onChange={(e) => updateVinRow(idx, "vin", e.target.value)}
-                    placeholder={`VIN ${idx + 1}`}
-                    style={{ ...inputBase, width: 200, padding: "7px 10px" }}
-                    onFocus={(e) => { e.currentTarget.style.borderColor = C.accent; }}
-                    onBlur={(e) => { e.currentTarget.style.borderColor = C.inputBdr; }}
-                  />
-                  <select
-                    value={row.gc}
-                    onChange={(e) => updateVinRow(idx, "gc", e.target.value)}
-                    style={{ ...inputBase, padding: "7px 8px", cursor: "pointer" }}
-                  >
-                    {GC_OPTIONS.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
-                  </select>
-                  {vinRows.length > 1 && (
-                    <button type="button" onClick={() => removeVinRow(idx)}
-                      style={{ color: C.muted, background: "none", border: "none", cursor: "pointer", fontSize: 16, paddingTop: 1 }}
-                      onMouseEnter={(e) => { e.currentTarget.style.color = C.danger; }}
-                      onMouseLeave={(e) => { e.currentTarget.style.color = C.muted; }}>
-                      ×
-                    </button>
-                  )}
-                </div>
-              ))}
-              {vinRows.length < 5 && (
-                <button type="button" onClick={addVinRow}
-                  style={{
-                    background: "none", border: `1px dashed ${C.inputBdr}`,
-                    color: C.muted, borderRadius: 2, padding: "4px 0", fontSize: 11,
-                    cursor: "pointer", fontFamily: mono, width: 262,
-                  }}
-                  onMouseEnter={(e) => { e.currentTarget.style.borderColor = C.accent; e.currentTarget.style.color = C.accent; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.borderColor = C.inputBdr; e.currentTarget.style.color = C.muted; }}>
-                  + Add VIN
-                </button>
-              )}
-              <span style={{ color: C.muted, fontSize: 10 }}>{vinRows.filter((r) => r.vin.trim()).length}/5 VINs</span>
-            </div>
+            <textarea
+              value={vinText}
+              onChange={(e) => handleVinTextChange(e.target.value)}
+              rows={4}
+              placeholder={"VIN1, VIN2\nor one per line\nmax 10"}
+              style={{ ...inputBase, width: 220, padding: "7px 10px", resize: "vertical" }}
+              onFocus={(e) => { e.currentTarget.style.borderColor = C.accent; }}
+              onBlur={(e) => { e.currentTarget.style.borderColor = C.inputBdr; }}
+            />
+            <span style={{ color: C.muted, fontSize: 10 }}>{parseVins(vinText).length}/10 VINs</span>
+            {parseVins(vinText).length > 0 && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 5, marginTop: 4 }}>
+                {parseVins(vinText).map((vin) => (
+                  <div key={vin} style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                    <span style={{ color: C.secondary, fontFamily: mono, fontSize: 11, width: 160, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{vin}</span>
+                    {GC_OPTIONS.map((opt) => (
+                      <button
+                        key={opt}
+                        type="button"
+                        onClick={() => setGcMap(prev => ({ ...prev, [vin]: opt as GcOption }))}
+                        style={{
+                          padding: "3px 8px", fontFamily: mono, fontSize: 10,
+                          border: `1px solid ${(gcMap[vin] ?? gcDefault) === opt ? C.accent : C.inputBdr}`,
+                          background: (gcMap[vin] ?? gcDefault) === opt ? "rgba(59,130,246,0.15)" : C.inputBg,
+                          color: (gcMap[vin] ?? gcDefault) === opt ? C.accent : C.secondary,
+                          borderRadius: 3, cursor: "pointer",
+                        }}
+                      >
+                        {opt}
+                      </button>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Submit */}

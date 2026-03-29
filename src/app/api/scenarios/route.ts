@@ -18,8 +18,8 @@ export async function POST(request: NextRequest) {
   if (!name || !vins || !gc_options) {
     return NextResponse.json({ error: "name, vins, and gc_options are required" }, { status: 400 });
   }
-  if (!Array.isArray(vins) || vins.length === 0 || vins.length > 5) {
-    return NextResponse.json({ error: "vins must be an array of 1–5 VINs" }, { status: 400 });
+  if (!Array.isArray(vins) || vins.length === 0 || vins.length > 10) {
+    return NextResponse.json({ error: "vins must be an array of 1–10 VINs" }, { status: 400 });
   }
   if (!Array.isArray(gc_options) || gc_options.length !== vins.length) {
     return NextResponse.json({ error: "gc_options must have the same length as vins" }, { status: 400 });
