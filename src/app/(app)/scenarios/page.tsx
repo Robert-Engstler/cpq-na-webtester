@@ -224,9 +224,11 @@ export default function ScenariosPage() {
             <textarea
               value={name}
               onChange={(e) => setName(e.target.value)}
-              rows={4}
               required
-              style={{ ...inputBase, width: 220, padding: "7px 10px", resize: "vertical" }}
+              style={{
+                ...inputBase, width: 220, padding: "7px 10px", resize: "none",
+                height: vins.length * 28 + Math.max(0, vins.length - 1) * 4,
+              }}
               onFocus={(e) => { e.currentTarget.style.borderColor = C.accent; }}
               onBlur={(e) => { e.currentTarget.style.borderColor = C.inputBdr; }}
             />
