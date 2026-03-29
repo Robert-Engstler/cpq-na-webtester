@@ -207,7 +207,17 @@ export default function RunDetailPage({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [jsonOpen, setJsonOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  function handleCopyClaudeCommand(runId: string) {
+    const url = `${window.location.origin}/api/share/${runId}`;
+    const command = `Analyze this CPQ NA Webtester run and tell me what went wrong, which steps failed, and where the delays are: ${url}`;
+    navigator.clipboard.writeText(command).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }
 
   const fetchRun = useCallback(() => {
     return fetch(`/api/runs/${id}`)
@@ -273,9 +283,23 @@ export default function RunDetailPage({
                 >
                   Run ID
                 </span>
-                <p style={{ color: C.muted }}>
-                  {fmtR(run.id)}
-                </p>
+                <div className="flex items-center gap-2">
+                  <p style={{ color: C.muted }}>{fmtR(run.id)}</p>
+                  <button
+                    onClick={() => handleCopyClaudeCommand(run.id)}
+                    title="Copy prompt for Claude Code analysis"
+                    style={{
+                      background: copied ? "rgba(59,130,246,0.15)" : C.inputBg,
+                      border: `1px solid ${copied ? C.accent : C.inputBdr}`,
+                      color: copied ? C.accent : C.muted,
+                      borderRadius: 3, padding: "2px 7px",
+                      fontSize: 10, fontFamily: "inherit", cursor: "pointer",
+                      whiteSpace: "nowrap", transition: "all 0.15s",
+                    }}
+                  >
+                    {copied ? "Copied!" : "Copy for Claude"}
+                  </button>
+                </div>
               </div>
               <div>
                 <span
