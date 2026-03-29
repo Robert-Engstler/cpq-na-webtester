@@ -51,9 +51,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: `status must be one of: ${allowed.join(", ")}` }, { status: 400 });
   }
 
-  const { rows: existing } = await sql`SELECT id FROM test_runs WHERE id = ${run_id}`;
+  const { rows: existing } = await sql`SELECT id, status FROM test_runs WHERE id = ${run_id}`;
   if (existing.length === 0) {
     return NextResponse.json({ error: "Run not found" }, { status: 404 });
+  }
+  if (existing[0].status === "stopped") {
+    return NextResponse.json({ ok: true, skipped: true });
   }
 
   const { rows } = await sql`

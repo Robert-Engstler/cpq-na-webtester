@@ -28,6 +28,7 @@ export const STATUS_CONFIG: Record<
   pending:  { color: C.pending, bg: "rgba(107,114,128,0.1)", border: C.pending },
   complete: { color: C.success, bg: "rgba(34,197,94,0.1)",   border: C.success },
   failed:   { color: C.danger,  bg: "rgba(239,68,68,0.1)",   border: C.danger },
+  stopped:  { color: C.warning, bg: "rgba(245,158,11,0.1)",  border: C.warning },
 };
 
 export const VIN_COLORS = {

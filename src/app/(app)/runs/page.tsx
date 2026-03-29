@@ -23,7 +23,7 @@ type Run = {
   environment: string;
   brand: string;
   country: string;
-  status: "pending" | "complete" | "failed";
+  status: "pending" | "complete" | "failed" | "stopped";
   pdf_url: string | null;
   result_json: StepResult[] | null;
   order_ids: Record<string, string> | null;
@@ -78,7 +78,7 @@ function StatusBadge({ status }: { status: Run["status"] }) {
         }} />
       )}
       <span style={{ position: "relative" }}>
-        {({ pending: "running", complete: "completed" } as Record<string, string>)[status] ?? status}
+        {({ pending: "running", complete: "completed", failed: "failed", stopped: "stopped" } as Record<string, string>)[status] ?? status}
       </span>
     </span>
   );
@@ -175,6 +175,7 @@ export default function RunsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [page, setPage] = useState(1);
+  const [stoppingId, setStoppingId] = useState<string | null>(null);
   const perPage = 5;
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -186,6 +187,13 @@ export default function RunsPage() {
   }, []);
 
   useEffect(() => { fetchRuns().finally(() => setLoading(false)); }, [fetchRuns]);
+
+  async function handleStop(id: string) {
+    setStoppingId(id);
+    await fetch(`/api/runs/${id}/stop`, { method: "POST" }).catch(() => {});
+    await fetchRuns();
+    setStoppingId(null);
+  }
 
   useEffect(() => {
     const hasActive = runs.some((r) => r.status === "pending");
@@ -348,12 +356,25 @@ export default function RunsPage() {
 
                   {/* Duration */}
                   <td className="px-4 py-3" style={{ ...tdTop, color: C.secondary }}>
-                    <Duration start={run.created_at} end={run.finished_at} live={run.status === "pending"} />
+                    <Duration start={run.created_at} end={run.finished_at} live={run.status === "pending" && stoppingId !== run.id} />
                   </td>
 
                   {/* Actions */}
                   <td className="px-4 py-3" style={tdTop}>
                     <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                      {run.status === "pending" && (
+                        <button
+                          onClick={() => handleStop(run.id)}
+                          disabled={stoppingId === run.id}
+                          style={{
+                            background: "none", color: C.warning, border: `1px solid ${C.warning}`,
+                            borderRadius: 2, padding: "3px 8px", fontSize: 11,
+                            fontFamily: mono, cursor: stoppingId === run.id ? "not-allowed" : "pointer",
+                            opacity: stoppingId === run.id ? 0.5 : 1, whiteSpace: "nowrap",
+                          }}>
+                          {stoppingId === run.id ? "Stopping…" : "Stop"}
+                        </button>
+                      )}
                       {run.status !== "pending" && (
                         <a href={`/runs/${run.id}`} target="_blank" rel="noopener noreferrer"
                           className="font-medium"
