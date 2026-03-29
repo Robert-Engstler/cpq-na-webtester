@@ -123,14 +123,14 @@ export function AppSettingsModal({ environment }: { environment?: string }) {
           }}
         >
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-            <span style={{ color: C.primary, fontSize: 13, fontWeight: 600 }}>Runner Settings</span>
+            <span style={{ color: C.primary, fontSize: 13, fontWeight: 600 }}>Scenario Defaults</span>
             <button onClick={handleClose} style={{ color: C.muted, background: "none", border: "none", cursor: "pointer", fontSize: 18 }}>×</button>
           </div>
 
           <>
               {/* Genuine Care Default */}
               <div style={row}>
-                <label style={labelStyle}>Genuine Care Default</label>
+                <label style={labelStyle}>Genuine Care Type</label>
                 <select
                   value={settings.gc_default}
                   onChange={(e) => setSettings((s) => ({ ...s, gc_default: e.target.value }))}
