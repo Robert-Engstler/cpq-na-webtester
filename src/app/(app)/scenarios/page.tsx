@@ -59,7 +59,7 @@ export default function ScenariosPage() {
   const [page, setPage] = useState(1);
   const perPage = 5;
 
-  const [name, setName] = useState("");
+  const [name, setName] = useState("Test");
   const [vinText, setVinText] = useState("");
   const [gcOptions, setGcOptions] = useState<GcOption[]>([]);
   const [submitting, setSubmitting] = useState(false);

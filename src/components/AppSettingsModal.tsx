@@ -18,8 +18,6 @@ const PRESET_TOOLTIPS: Record<string, string> = {
 
 export function AppSettingsModal({ environment }: { environment?: string }) {
   const [open, setOpen] = useState(false);
-  const [step, setStep] = useState<"password" | "settings">("password");
-  const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -33,40 +31,23 @@ export function AppSettingsModal({ environment }: { environment?: string }) {
   const overlayRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (open && step === "settings") {
+    if (open) {
       fetch("/api/settings/app")
         .then((r) => r.json())
         .then((d) => setSettings((prev) => ({ ...prev, ...d })));
     }
-  }, [open, step]);
+  }, [open]);
 
   function handleOpen() {
     setOpen(true);
-    setStep("password");
-    setPassword("");
     setError("");
     setSaved(false);
   }
 
   function handleClose() {
     setOpen(false);
-    setPassword("");
     setError("");
     setSaved(false);
-  }
-
-  async function handleVerify() {
-    setError("");
-    const res = await fetch("/api/settings/verify", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ password }),
-    });
-    if (res.ok) {
-      setStep("settings");
-    } else {
-      setError("Incorrect password");
-    }
   }
 
   async function handleSave() {
@@ -75,7 +56,7 @@ export function AppSettingsModal({ environment }: { environment?: string }) {
     const res = await fetch("/api/settings/app", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ password, ...settings }),
+      body: JSON.stringify(settings),
     });
     setSaving(false);
     if (res.ok) {
@@ -146,34 +127,7 @@ export function AppSettingsModal({ environment }: { environment?: string }) {
             <button onClick={handleClose} style={{ color: C.muted, background: "none", border: "none", cursor: "pointer", fontSize: 18 }}>×</button>
           </div>
 
-          {step === "password" ? (
-            <>
-              <div style={row}>
-                <label style={labelStyle}>Admin Password</label>
-                <input
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === "Enter") handleVerify(); }}
-                  placeholder="Enter settings password"
-                  style={input}
-                  autoFocus
-                />
-              </div>
-              {error && <p style={{ color: C.danger, fontSize: 11, marginBottom: 12 }}>{error}</p>}
-              <button
-                onClick={handleVerify}
-                style={{
-                  width: "100%", background: C.accent, color: "#fff",
-                  border: "none", borderRadius: 4, padding: "8px 0",
-                  fontFamily: mono, fontSize: 12, cursor: "pointer",
-                }}
-              >
-                Unlock
-              </button>
-            </>
-          ) : (
-            <>
+          <>
               {/* Genuine Care Default */}
               <div style={row}>
                 <label style={labelStyle}>Genuine Care Default</label>
@@ -280,7 +234,6 @@ export function AppSettingsModal({ environment }: { environment?: string }) {
                 {saving ? "Saving…" : "Save Settings"}
               </button>
             </>
-          )}
         </div>
       </div>
 

@@ -10,17 +10,11 @@ export async function GET() {
 }
 
 /** PUT /api/settings/app
- * Body: { password, gc_default, annual_duration, svc_preset, stage_endpoint }
- * Requires admin password (SETTINGS_PASSWORD) in addition to session auth.
+ * Body: { gc_default, annual_duration, svc_preset, stage_endpoint }
+ * Requires session auth only (no admin password).
  */
 export async function PUT(request: NextRequest) {
   const body = await request.json().catch(() => ({}));
-  const expected = process.env.SETTINGS_PASSWORD ?? "Agco2022!";
-
-  if (!body.password || body.password !== expected) {
-    return NextResponse.json({ error: "Invalid password" }, { status: 401 });
-  }
-
   const { gc_default, annual_duration, svc_preset, stage_endpoint } = body;
 
   const validGc = ["Annual", "Standard", "Parts-Only"];
