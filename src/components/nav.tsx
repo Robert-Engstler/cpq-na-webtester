@@ -3,13 +3,14 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { C } from "@/lib/design";
+import { AppSettingsModal } from "@/components/AppSettingsModal";
 
 const links = [
   { href: "/scenarios", label: "Scenarios" },
   { href: "/runs", label: "Runs" },
 ];
 
-export function Nav() {
+export function Nav({ environment }: { environment?: string }) {
   const pathname = usePathname();
   const router = useRouter();
 
@@ -27,7 +28,7 @@ export function Nav() {
       }}
     >
       <span className="font-semibold" style={{ color: C.primary }}>
-        CPQ Webtester
+        CPQ NA Webtester
       </span>
       <div className="flex flex-1 items-center gap-4">
         {links.map(({ href, label }) => (
@@ -43,15 +44,18 @@ export function Nav() {
           </Link>
         ))}
       </div>
-      <button
-        onClick={handleLogout}
-        className="text-sm"
-        style={{ color: C.muted }}
-        onMouseEnter={(e) => { e.currentTarget.style.color = C.primary; }}
-        onMouseLeave={(e) => { e.currentTarget.style.color = C.muted; }}
-      >
-        Logout
-      </button>
+      <div className="flex items-center gap-3">
+        <AppSettingsModal environment={environment} />
+        <button
+          onClick={handleLogout}
+          className="text-sm"
+          style={{ color: C.muted }}
+          onMouseEnter={(e) => { e.currentTarget.style.color = C.primary; }}
+          onMouseLeave={(e) => { e.currentTarget.style.color = C.muted; }}
+        >
+          Logout
+        </button>
+      </div>
     </nav>
   );
 }

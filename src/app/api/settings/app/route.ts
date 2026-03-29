@@ -1,0 +1,54 @@
+import { NextRequest, NextResponse } from "next/server";
+import { sql } from "@/lib/db";
+
+/** GET /api/settings/app
+ * Returns the current runner settings (requires session auth via middleware).
+ */
+export async function GET() {
+  const { rows } = await sql`SELECT * FROM app_settings WHERE id = 1`;
+  return NextResponse.json(rows[0] ?? {});
+}
+
+/** PUT /api/settings/app
+ * Body: { password, gc_default, annual_duration, svc_preset, stage_endpoint }
+ * Requires admin password (SETTINGS_PASSWORD) in addition to session auth.
+ */
+export async function PUT(request: NextRequest) {
+  const body = await request.json().catch(() => ({}));
+  const expected = process.env.SETTINGS_PASSWORD ?? "Agco2022!";
+
+  if (!body.password || body.password !== expected) {
+    return NextResponse.json({ error: "Invalid password" }, { status: 401 });
+  }
+
+  const { gc_default, annual_duration, svc_preset, stage_endpoint } = body;
+
+  const validGc = ["Annual", "Standard", "Parts-Only"];
+  const validDurations = [12, 24, 36, 48, 60];
+  const validPresets = ["Minimum", "Medium", "Maximum"];
+  const validEndpoints = ["Configuration", "Order"];
+
+  if (gc_default && !validGc.includes(gc_default)) {
+    return NextResponse.json({ error: "Invalid gc_default" }, { status: 400 });
+  }
+  if (annual_duration !== undefined && !validDurations.includes(Number(annual_duration))) {
+    return NextResponse.json({ error: "Invalid annual_duration" }, { status: 400 });
+  }
+  if (svc_preset && !validPresets.includes(svc_preset)) {
+    return NextResponse.json({ error: "Invalid svc_preset" }, { status: 400 });
+  }
+  if (stage_endpoint && !validEndpoints.includes(stage_endpoint)) {
+    return NextResponse.json({ error: "Invalid stage_endpoint" }, { status: 400 });
+  }
+
+  await sql`
+    UPDATE app_settings SET
+      gc_default      = COALESCE(${gc_default ?? null}, gc_default),
+      annual_duration = COALESCE(${annual_duration != null ? Number(annual_duration) : null}, annual_duration),
+      svc_preset      = COALESCE(${svc_preset ?? null}, svc_preset),
+      stage_endpoint  = COALESCE(${stage_endpoint ?? null}, stage_endpoint)
+    WHERE id = 1
+  `;
+
+  return NextResponse.json({ ok: true });
+}

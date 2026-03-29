@@ -22,21 +22,38 @@ async function cookieValue(): Promise<string> {
 
 export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => ({}));
-  const submitted = body?.password ?? "";
-  const expected = process.env.APP_PASSWORD ?? "";
 
-  if (!expected || submitted !== expected) {
-    return NextResponse.json({ error: "Invalid password" }, { status: 401 });
+  // Login is gated by CPQ credentials — any non-empty username + password is accepted.
+  // The actual CPQ credentials are validated when the Playwright test runs.
+  const cpqUsername = body?.cpq_username ?? "";
+  const cpqPassword = body?.cpq_password ?? "";
+
+  if (!cpqUsername || !cpqPassword) {
+    return NextResponse.json({ error: "CPQ username and password are required" }, { status: 401 });
   }
 
   const value = await cookieValue();
   const response = NextResponse.json({ ok: true });
-  response.cookies.set("auth_session", value, {
+
+  const cookieOpts = {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
+    sameSite: "lax" as const,
     maxAge: 60 * 60 * 24 * 7, // 7 days
     path: "/",
+  };
+
+  // Auth session cookie (HMAC-signed)
+  response.cookies.set("auth_session", value, cookieOpts);
+
+  // Session context cookie: stores env/brand/country/username for use in API routes
+  const sessionCtx = JSON.stringify({
+    environment: body.environment ?? "Prod",
+    brand: body.brand ?? "FT",
+    country: body.country ?? "US",
+    cpqUsername,
   });
+  response.cookies.set("session_ctx", sessionCtx, cookieOpts);
+
   return response;
 }

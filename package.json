@@ -1,12 +1,13 @@
 {
-  "name": "cpq-webtester-tmp",
+  "name": "cpq-na-webtester",
   "version": "0.1.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "docs": "pandoc docs/cpq-na-webtester.md -o docs/cpq-na-webtester.docx"
   },
   "dependencies": {
     "@vercel/postgres": "^0.10.0",

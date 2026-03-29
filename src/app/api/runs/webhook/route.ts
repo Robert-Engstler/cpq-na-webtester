@@ -12,7 +12,6 @@ function safeEqual(a: string, b: string): boolean {
 }
 
 export async function POST(request: NextRequest) {
-  // Verify the shared secret sent by the Playwright script
   const webhookSecret = process.env.WEBHOOK_SECRET;
   if (!webhookSecret) {
     return NextResponse.json({ error: "Webhook not configured" }, { status: 500 });
@@ -24,7 +23,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // Parse payload
   let body: {
     run_id: string;
     status: string;
@@ -33,6 +31,7 @@ export async function POST(request: NextRequest) {
     pdf_url?: string;
     pdf_text?: string;
     performance_json?: unknown;
+    order_ids?: unknown;  // map: VIN -> order ID or "config test only"
   };
 
   try {
@@ -41,7 +40,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const { run_id, status, result_json, screenshot_url, pdf_url, pdf_text, performance_json } = body;
+  const { run_id, status, result_json, screenshot_url, pdf_url, pdf_text, performance_json, order_ids } = body;
 
   if (!run_id || !status) {
     return NextResponse.json({ error: "run_id and status are required" }, { status: 400 });
@@ -49,19 +48,14 @@ export async function POST(request: NextRequest) {
 
   const allowed = ["complete", "failed"];
   if (!allowed.includes(status)) {
-    return NextResponse.json(
-      { error: `status must be one of: ${allowed.join(", ")}` },
-      { status: 400 }
-    );
+    return NextResponse.json({ error: `status must be one of: ${allowed.join(", ")}` }, { status: 400 });
   }
 
-  // Confirm the run exists
   const { rows: existing } = await sql`SELECT id FROM test_runs WHERE id = ${run_id}`;
   if (existing.length === 0) {
     return NextResponse.json({ error: "Run not found" }, { status: 404 });
   }
 
-  // Write results
   const { rows } = await sql`
     UPDATE test_runs SET
       status           = ${status},
@@ -70,6 +64,7 @@ export async function POST(request: NextRequest) {
       pdf_url          = ${pdf_url ?? null},
       pdf_text         = ${pdf_text ?? null},
       performance_json = ${performance_json != null ? JSON.stringify(performance_json) : null},
+      order_ids        = ${order_ids != null ? JSON.stringify(order_ids) : null},
       finished_at      = NOW()
     WHERE id = ${run_id}
     RETURNING *

@@ -1,25 +1,65 @@
-name: CPQ Test Run
+name: CPQ NA Test Run
 
 on:
   workflow_dispatch:
     inputs:
       vins:
-        description: "Comma-separated Vehicle Identification Numbers"
+        description: "Comma-separated VINs"
         required: true
         type: string
-      language:
-        description: "Test language (en or de)"
+      gc_options:
+        description: "Comma-separated Genuine Care types (parallel to vins): Annual|Standard|Parts-Only"
         required: true
         type: string
       run_id:
         description: "Test run UUID (from the app database)"
         required: true
         type: string
+      environment:
+        description: "CPQ environment: Prod or Stage"
+        required: true
+        type: string
+      brand:
+        description: "Brand: FT (Fendt) or MF (Massey Ferguson)"
+        required: true
+        type: string
+      country:
+        description: "Country: US or CA"
+        required: true
+        type: string
+      cpq_username:
+        description: "CPQ login username"
+        required: true
+        type: string
+      cpq_url:
+        description: "Resolved CPQ base URL"
+        required: true
+        type: string
+      stage_endpoint:
+        description: "Where the Stage test ends: Configuration or Order"
+        required: false
+        type: string
+        default: "Configuration"
+      gc_default:
+        description: "Default Genuine Care type"
+        required: false
+        type: string
+        default: "Standard"
+      annual_duration:
+        description: "Annual duration in months"
+        required: false
+        type: string
+        default: "60"
+      svc_preset:
+        description: "Service condition preset: Minimum | Medium | Maximum"
+        required: false
+        type: string
+        default: "Minimum"
 
 jobs:
   run-test:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
 
     steps:
       - name: Checkout repository
@@ -43,19 +83,29 @@ jobs:
       - name: Install Playwright browser
         run: npx playwright install chromium --with-deps
 
-      - name: Run CPQ test
+      - name: Run CPQ NA test
         env:
-          VINS: ${{ inputs.vins }}
-          LANGUAGE: ${{ inputs.language }}
-          RUN_ID: ${{ inputs.run_id }}
-          TEST_USERNAME: ${{ secrets.TEST_USERNAME }}
-          TEST_PASSWORD: ${{ secrets.TEST_PASSWORD }}
-          WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
-          WEBHOOK_SECRET: ${{ secrets.WEBHOOK_SECRET }}
+          VINS:                  ${{ inputs.vins }}
+          GC_OPTIONS:            ${{ inputs.gc_options }}
+          RUN_ID:                ${{ inputs.run_id }}
+          ENVIRONMENT:           ${{ inputs.environment }}
+          BRAND:                 ${{ inputs.brand }}
+          COUNTRY:               ${{ inputs.country }}
+          CPQ_USERNAME:          ${{ inputs.cpq_username }}
+          CPQ_URL:               ${{ inputs.cpq_url }}
+          # CPQ password is NOT passed as input (would be visible in logs)
+          # Instead it is resolved from the CPQ_PASSWORDS secret (JSON map)
+          CPQ_PASSWORDS:         ${{ secrets.CPQ_PASSWORDS }}
+          STAGE_ENDPOINT:        ${{ inputs.stage_endpoint }}
+          GC_DEFAULT:            ${{ inputs.gc_default }}
+          ANNUAL_DURATION:       ${{ inputs.annual_duration }}
+          SVC_PRESET:            ${{ inputs.svc_preset }}
+          WEBHOOK_URL:           ${{ secrets.WEBHOOK_URL }}
+          WEBHOOK_SECRET:        ${{ secrets.WEBHOOK_SECRET }}
           BLOB_READ_WRITE_TOKEN: ${{ secrets.BLOB_READ_WRITE_TOKEN }}
-        run: node tests/cpq-test.mjs
+        run: node tests/cpq-na-test.mjs
 
-      - name: Upload screenshots
+      - name: Upload screenshots on failure
         if: always()
         uses: actions/upload-artifact@v4
         with:
