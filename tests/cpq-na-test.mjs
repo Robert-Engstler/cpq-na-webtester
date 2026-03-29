@@ -79,17 +79,44 @@ console.log(`Stage endpoint: ${STAGE_ENDPOINT}  |  SVC preset: ${SVC_PRESET}  | 
 const results = [];
 const orderIdsMap = {}; // VIN -> order ID or "config test only"
 
-function pass(step, extra) {
-  results.push({ step, passed: true, ...extra });
-  console.log(`✓ ${step}`);
+async function pass(step, extra = {}) {
+  const { page, startTime, ...rest } = extra;
+  const url = page ? page.url() : undefined;
+  const durationMs = startTime != null ? Date.now() - startTime : undefined;
+  const result = { step, passed: true, ...rest };
+  if (url !== undefined) result.url = url;
+  if (durationMs !== undefined) result.durationMs = durationMs;
+  results.push(result);
+  console.log(`✓ ${step}${durationMs != null ? ` (${durationMs}ms)` : ""}`);
+  await postStep(result);
 }
 
-function fail(step, err) {
-  results.push({ step, passed: false, error: String(err) });
+async function fail(step, err, extra = {}) {
+  const { page, startTime } = extra;
+  const url = page ? page.url() : undefined;
+  const durationMs = startTime != null ? Date.now() - startTime : undefined;
+  const screenshotUrl = page ? await screenshotToBlob(page, step) : null;
+  const result = { step, passed: false, error: String(err) };
+  if (url !== undefined) result.url = url;
+  if (durationMs !== undefined) result.durationMs = durationMs;
+  if (screenshotUrl) result.screenshotUrl = screenshotUrl;
+  results.push(result);
   console.error(`✗ ${step}: ${err}`);
+  await postStep(result);
 }
 
 // ── Webhook ───────────────────────────────────────────────────────────────────
+
+async function postStep(stepResult) {
+  if (!WEBHOOK_URL || !RUN_ID) return;
+  try {
+    await fetch(WEBHOOK_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${WEBHOOK_SECRET}` },
+      body: JSON.stringify({ type: "step", run_id: RUN_ID, step: stepResult }),
+    });
+  } catch { /* don't fail the test over a telemetry issue */ }
+}
 
 async function postResults(status, pdfZipUrl) {
   if (!WEBHOOK_URL) return;
@@ -131,6 +158,29 @@ async function uploadToBlob(filePath, filename) {
   const { url } = await res.json();
   console.log(`  Uploaded: ${url}`);
   return url;
+}
+
+async function screenshotToBlob(page, label) {
+  const token = process.env.BLOB_READ_WRITE_TOKEN;
+  if (!token || !RUN_ID) return null;
+  try {
+    const buf = await page.screenshot({ fullPage: false });
+    const safeName = label.replace(/[^a-z0-9]/gi, "-").toLowerCase().slice(0, 60);
+    const filename = `${RUN_ID}/screenshots/${safeName}-${Date.now()}.png`;
+    const res = await fetch(`https://blob.vercel-storage.com/${filename}`, {
+      method: "PUT",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "x-api-version": "7",
+        "x-content-type": "image/png",
+      },
+      body: buf,
+    });
+    if (!res.ok) return null;
+    const { url } = await res.json();
+    console.log(`  Screenshot: ${url}`);
+    return url;
+  } catch { return null; }
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -178,9 +228,11 @@ async function run() {
   const page = await context.newPage();
   let overallStatus = "complete";
   const allPdfPaths = [];
+  let t0;
 
   try {
     // ── 1. Login (once for all VINs) ──────────────────────────────────────────
+    t0 = Date.now();
     try {
       await page.goto(CPQ_URL, { waitUntil: "networkidle", timeout: 30000 });
 
@@ -194,23 +246,23 @@ async function run() {
         await page.getByRole("button", { name: /log.?in|sign.?in/i }).first().click();
         await page.waitForLoadState("networkidle", { timeout: 30000 });
       }
-      pass("Login");
+      await pass("Login", { page, startTime: t0 });
     } catch (err) {
-      await page.screenshot({ path: "login-failure.png" });
-      fail("Login", err);
+      await fail("Login", err, { page, startTime: t0 });
       overallStatus = "failed";
       throw err;
     }
 
     // ── 2. Accept cookies (once) ───────────────────────────────────────────────
+    t0 = Date.now();
     try {
       const btn = page.getByRole("button", { name: /required cookies|accept/i });
       if (await btn.first().isVisible({ timeout: 5000 })) {
         await btn.first().click();
       }
-      pass("Accept cookies");
+      await pass("Accept cookies", { page, startTime: t0 });
     } catch {
-      pass("Accept cookies");
+      await pass("Accept cookies", { page, startTime: t0 });
     }
 
     await page.close();
@@ -227,6 +279,7 @@ async function run() {
 
       try {
         // ── 3. Tab Machine: Enter VIN ────────────────────────────────────────
+        t0 = Date.now();
         try {
           await vinPage.goto(CPQ_URL, { waitUntil: "load", timeout: 30000 });
           await dismissConsentBanner(vinPage);
@@ -244,15 +297,15 @@ async function run() {
             await vinInput.press("Enter");
           }
           await vinPage.waitForLoadState("networkidle", { timeout: 20000 });
-          pass(`${prefix} VIN search (Tab Machine)`);
+          await pass(`${prefix} VIN search (Tab Machine)`, { page: vinPage, startTime: t0 });
         } catch (err) {
-          await vinPage.screenshot({ path: `vin-search-failure-${VIN}.png` });
-          fail(`${prefix} VIN search (Tab Machine)`, err);
+          await fail(`${prefix} VIN search (Tab Machine)`, err, { page: vinPage, startTime: t0 });
           overallStatus = "failed";
           throw err;
         }
 
         // ── 4. Tab Configuration → Overview: Select Genuine Care ──────────────
+        t0 = Date.now();
         try {
           await dismissConsentBanner(vinPage);
           // Navigate to Configuration tab if not already there
@@ -264,15 +317,15 @@ async function run() {
           await gcCard.waitFor({ timeout: 15000 });
           await gcCard.click();
           await vinPage.waitForLoadState("networkidle", { timeout: 15000 });
-          pass(`${prefix} Select Genuine Care (Tab Configuration → Overview)`);
+          await pass(`${prefix} Select Genuine Care (Tab Configuration → Overview)`, { page: vinPage, startTime: t0 });
         } catch (err) {
-          await vinPage.screenshot({ path: `gc-overview-failure-${VIN}.png` });
-          fail(`${prefix} Select Genuine Care (Tab Configuration → Overview)`, err);
+          await fail(`${prefix} Select Genuine Care (Tab Configuration → Overview)`, err, { page: vinPage, startTime: t0 });
           overallStatus = "failed";
           throw err;
         }
 
         // ── 5. Tab Configuration → Choose GC Options: Select type ─────────────
+        t0 = Date.now();
         try {
           await dismissConsentBanner(vinPage);
           // Find the radio/button for the GC option (Annual / Standard / Parts-Only)
@@ -283,15 +336,15 @@ async function run() {
           await gcButton.waitFor({ timeout: 15000 });
           await gcButton.click();
           await vinPage.waitForTimeout(1000);
-          pass(`${prefix} Select ${gcOption} (Tab Configuration → Choose GC Options)`);
+          await pass(`${prefix} Select ${gcOption} (Tab Configuration → Choose GC Options)`, { page: vinPage, startTime: t0 });
         } catch (err) {
-          await vinPage.screenshot({ path: `gc-options-failure-${VIN}.png` });
-          fail(`${prefix} Select ${gcOption} (Tab Configuration → Choose GC Options)`, err);
+          await fail(`${prefix} Select ${gcOption} (Tab Configuration → Choose GC Options)`, err, { page: vinPage, startTime: t0 });
           overallStatus = "failed";
           throw err;
         }
 
         // ── 6. Tab Configuration → Specifications ─────────────────────────────
+        t0 = Date.now();
         try {
           await dismissConsentBanner(vinPage);
 
@@ -437,17 +490,17 @@ async function run() {
           }
 
           if (manualSpecs.length > 0) {
-            pass(`${prefix} Tab Configuration → Specifications — manual specs: ${manualSpecs.join(", ")}`, { hadManualSpec: true, manualSpecs });
+            await pass(`${prefix} Tab Configuration → Specifications`, { page: vinPage, startTime: t0, hadManualSpec: true, manualSpecs });
           } else {
-            pass(`${prefix} Tab Configuration → Specifications`);
+            await pass(`${prefix} Tab Configuration → Specifications`, { page: vinPage, startTime: t0 });
           }
         } catch (err) {
-          await vinPage.screenshot({ path: `specs-failure-${VIN}.png` });
-          fail(`${prefix} Tab Configuration → Specifications`, err);
+          await fail(`${prefix} Tab Configuration → Specifications`, err, { page: vinPage, startTime: t0 });
           overallStatus = "failed";
         }
 
         // ── 7. Apply Changes → Add to Configuration ───────────────────────────
+        t0 = Date.now();
         try {
           await dismissConsentBanner(vinPage);
 
@@ -485,10 +538,9 @@ async function run() {
           // Wait for Save button (Summary page)
           await dismissConsentBanner(vinPage);
           await vinPage.getByRole("button", { name: /^save$/i }).first().waitFor({ timeout: 30000 });
-          pass(`${prefix} Apply changes → Add to configuration`);
+          await pass(`${prefix} Apply changes → Add to configuration`, { page: vinPage, startTime: t0 });
         } catch (err) {
-          await vinPage.screenshot({ path: `apply-failure-${VIN}.png` });
-          fail(`${prefix} Apply changes → Add to configuration`, err);
+          await fail(`${prefix} Apply changes → Add to configuration`, err, { page: vinPage, startTime: t0 });
           overallStatus = "failed";
           throw err;
         }
@@ -497,6 +549,7 @@ async function run() {
         await dismissConsentBanner(vinPage);
         let configId = null;
         let configUrl = null;
+        t0 = Date.now();
         try {
           await vinPage.locator("button.btn-secondary-cta.btn-with-icon, button").filter({ hasText: /^save$/i }).first().click();
 
@@ -511,14 +564,15 @@ async function run() {
           configUrl = vinPage.url();
           if (configId) console.log(`  Config ID: ${configId}`);
 
-          pass(`${prefix} Save Config`, { configId, configUrl });
+          await pass(`${prefix} Save Config`, { page: vinPage, startTime: t0, configId, configUrl });
         } catch (err) {
-          fail(`${prefix} Save Config`, err);
+          await fail(`${prefix} Save Config`, err, { page: vinPage, startTime: t0 });
           overallStatus = "failed";
         }
 
         // ── 9. Download Parts Picklist PDF ─────────────────────────────────────
         await dismissConsentBanner(vinPage);
+        t0 = Date.now();
         try {
           const dlBtns = vinPage.locator("button").filter({ hasText: /download|parts.?picklist/i });
           await dlBtns.first().waitFor({ timeout: 15000 });
@@ -530,15 +584,15 @@ async function run() {
           await dl.saveAs(partsPath);
           allPdfPaths.push(partsPath);
           console.log(`  Saved: ${dl.suggestedFilename()}`);
-          pass(`${prefix} Download Parts Picklist PDF`);
+          await pass(`${prefix} Download Parts Picklist PDF`, { page: vinPage, startTime: t0 });
         } catch (err) {
-          await vinPage.screenshot({ path: `download-parts-failure-${VIN}.png` });
-          fail(`${prefix} Download Parts Picklist PDF`, err);
+          await fail(`${prefix} Download Parts Picklist PDF`, err, { page: vinPage, startTime: t0 });
           overallStatus = "failed";
         }
 
         // ── 10. Download Service Checklist PDF ────────────────────────────────
         await dismissConsentBanner(vinPage);
+        t0 = Date.now();
         try {
           const dlBtns = vinPage.locator("button").filter({ hasText: /download|service.?checklist/i });
           const [dl] = await Promise.all([
@@ -549,10 +603,9 @@ async function run() {
           await dl.saveAs(svcPath);
           allPdfPaths.push(svcPath);
           console.log(`  Saved: ${dl.suggestedFilename()}`);
-          pass(`${prefix} Download Service Checklist PDF`);
+          await pass(`${prefix} Download Service Checklist PDF`, { page: vinPage, startTime: t0 });
         } catch (err) {
-          await vinPage.screenshot({ path: `download-service-failure-${VIN}.png` });
-          fail(`${prefix} Download Service Checklist PDF`, err);
+          await fail(`${prefix} Download Service Checklist PDF`, err, { page: vinPage, startTime: t0 });
           overallStatus = "failed";
         }
 
@@ -566,20 +619,22 @@ async function run() {
         // ── Stage flow continues below ──────────────────────────────────────
 
         // ── 11. Click Create Quote ─────────────────────────────────────────────
+        t0 = Date.now();
         try {
           await dismissConsentBanner(vinPage);
           const createQuoteBtn = vinPage.getByRole("button", { name: /create quote/i });
           await createQuoteBtn.waitFor({ timeout: 15000 });
           await createQuoteBtn.click();
           await vinPage.waitForLoadState("networkidle", { timeout: 20000 });
-          pass(`${prefix} Click Create Quote`);
+          await pass(`${prefix} Click Create Quote`, { page: vinPage, startTime: t0 });
         } catch (err) {
-          fail(`${prefix} Click Create Quote`, err);
+          await fail(`${prefix} Click Create Quote`, err, { page: vinPage, startTime: t0 });
           overallStatus = "failed";
           throw err;
         }
 
         // ── 12. Tab Quotation ──────────────────────────────────────────────────
+        t0 = Date.now();
         try {
           await dismissConsentBanner(vinPage);
 
@@ -618,16 +673,16 @@ async function run() {
           await orderLink.click();
           await vinPage.waitForLoadState("networkidle", { timeout: 15000 });
 
-          pass(`${prefix} Tab Quotation (search customer, save, → Order)`);
+          await pass(`${prefix} Tab Quotation (search customer, save, → Order)`, { page: vinPage, startTime: t0 });
         } catch (err) {
-          await vinPage.screenshot({ path: `quotation-failure-${VIN}.png` });
-          fail(`${prefix} Tab Quotation`, err);
+          await fail(`${prefix} Tab Quotation`, err, { page: vinPage, startTime: t0 });
           overallStatus = "failed";
           throw err;
         }
 
         // ── 13. Tab Order: Place Order ─────────────────────────────────────────
         let orderId = null;
+        t0 = Date.now();
         try {
           await dismissConsentBanner(vinPage);
 
@@ -674,15 +729,15 @@ async function run() {
             orderIdsMap[VIN] = "placed";
           }
 
-          pass(`${prefix} Place Order`, { orderId });
+          await pass(`${prefix} Place Order`, { page: vinPage, startTime: t0, orderId });
         } catch (err) {
-          await vinPage.screenshot({ path: `order-failure-${VIN}.png` });
-          fail(`${prefix} Tab Order`, err);
+          await fail(`${prefix} Tab Order`, err, { page: vinPage, startTime: t0 });
           overallStatus = "failed";
         }
 
         // ── 14. Download Genuine Care Order Details PDF ────────────────────────
         await dismissConsentBanner(vinPage);
+        t0 = Date.now();
         try {
           const dlBtn = vinPage.locator("button, a").filter({ hasText: /genuine care order|gc order|order details/i }).first();
           await dlBtn.waitFor({ timeout: 15000 });
@@ -694,14 +749,15 @@ async function run() {
           await dl.saveAs(gcOrderPath);
           allPdfPaths.push(gcOrderPath);
           console.log(`  Saved: ${dl.suggestedFilename()}`);
-          pass(`${prefix} Download Genuine Care Order Details PDF`);
+          await pass(`${prefix} Download Genuine Care Order Details PDF`, { page: vinPage, startTime: t0 });
         } catch (err) {
-          fail(`${prefix} Download Genuine Care Order Details PDF`, err);
+          await fail(`${prefix} Download Genuine Care Order Details PDF`, err, { page: vinPage, startTime: t0 });
           overallStatus = "failed";
         }
 
         // ── 15. Download Maintenance Agreement PDF ────────────────────────────
         await dismissConsentBanner(vinPage);
+        t0 = Date.now();
         try {
           const dlBtn = vinPage.locator("button, a").filter({ hasText: /maintenance agreement/i }).first();
           await dlBtn.waitFor({ timeout: 15000 });
@@ -713,9 +769,9 @@ async function run() {
           await dl.saveAs(maintPath);
           allPdfPaths.push(maintPath);
           console.log(`  Saved: ${dl.suggestedFilename()}`);
-          pass(`${prefix} Download Maintenance Agreement PDF`);
+          await pass(`${prefix} Download Maintenance Agreement PDF`, { page: vinPage, startTime: t0 });
         } catch (err) {
-          fail(`${prefix} Download Maintenance Agreement PDF`, err);
+          await fail(`${prefix} Download Maintenance Agreement PDF`, err, { page: vinPage, startTime: t0 });
           overallStatus = "failed";
         }
 
@@ -755,7 +811,7 @@ async function run() {
     } else {
       console.log(`\n── Results (${overallStatus}) ──`);
       for (const r of results) {
-        console.log(`  ${r.passed ? "✓" : "✗"} ${r.step}${r.error ? ": " + r.error : ""}`);
+        console.log(`  ${r.passed ? "✓" : "✗"} ${r.step}${r.error ? ": " + r.error : ""}${r.durationMs != null ? ` (${r.durationMs}ms)` : ""}`);
       }
       console.log("Order IDs:", orderIdsMap);
     }

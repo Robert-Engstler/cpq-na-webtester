@@ -24,14 +24,16 @@ export async function POST(request: NextRequest) {
   }
 
   let body: {
+    type?: string;
     run_id: string;
-    status: string;
+    step?: unknown;
+    status?: string;
     result_json?: unknown;
     screenshot_url?: string;
     pdf_url?: string;
     pdf_text?: string;
     performance_json?: unknown;
-    order_ids?: unknown;  // map: VIN -> order ID or "config test only"
+    order_ids?: unknown;
   };
 
   try {
@@ -40,10 +42,29 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
+  if (!body.run_id) {
+    return NextResponse.json({ error: "run_id is required" }, { status: 400 });
+  }
+
+  // ── Incremental step update ───────────────────────────────────────────────────
+  if (body.type === "step" && body.step != null) {
+    const { rows: existing } = await sql`SELECT status FROM test_runs WHERE id = ${body.run_id}`;
+    if (existing.length === 0) return NextResponse.json({ error: "Run not found" }, { status: 404 });
+    if (existing[0].status === "stopped") return NextResponse.json({ ok: true, skipped: true });
+
+    await sql`
+      UPDATE test_runs
+      SET result_json = COALESCE(result_json, '[]'::jsonb) || ${JSON.stringify([body.step])}::jsonb
+      WHERE id = ${body.run_id} AND status = 'pending'
+    `;
+    return NextResponse.json({ ok: true });
+  }
+
+  // ── Final result ──────────────────────────────────────────────────────────────
   const { run_id, status, result_json, screenshot_url, pdf_url, pdf_text, performance_json, order_ids } = body;
 
-  if (!run_id || !status) {
-    return NextResponse.json({ error: "run_id and status are required" }, { status: 400 });
+  if (!status) {
+    return NextResponse.json({ error: "status is required" }, { status: 400 });
   }
 
   const allowed = ["complete", "failed"];

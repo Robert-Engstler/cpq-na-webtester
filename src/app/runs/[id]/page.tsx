@@ -12,6 +12,9 @@ type StepResult = {
   configId?: string;
   configUrl?: string;
   error?: string;
+  url?: string;
+  durationMs?: number;
+  screenshotUrl?: string;
 };
 
 type Run = {
@@ -439,7 +442,9 @@ export default function RunDetailPage({
                   <tr style={{ background: C.surfaceHi, borderBottom: `1px solid ${C.border}` }}>
                     <th className={thClass} style={{ ...thStyle, width: 100 }}>Step</th>
                     <th className={`${thClass} w-10`} style={thStyle}>Result</th>
+                    <th className={thClass} style={{ ...thStyle, width: 70 }}>Duration</th>
                     <th className={thClass} style={thStyle}>Description</th>
+                    <th className={thClass} style={{ ...thStyle, width: 220 }}>URL</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -470,6 +475,13 @@ export default function RunDetailPage({
                             </span>
                           )}
                         </td>
+                        <td className="px-4 py-2.5" style={{ ...tdTop, color: C.muted, fontVariantNumeric: "tabular-nums" }}>
+                          {step.durationMs != null
+                            ? step.durationMs >= 60000
+                              ? `${Math.floor(step.durationMs / 60000)}m ${Math.round((step.durationMs % 60000) / 1000)}s`
+                              : `${(step.durationMs / 1000).toFixed(1)}s`
+                            : "—"}
+                        </td>
                         <td className="px-4 py-2.5" style={{ ...tdTop, color }}>
                           {step.step}
                           {step.error && (
@@ -477,6 +489,22 @@ export default function RunDetailPage({
                               {step.error}
                             </p>
                           )}
+                          {step.screenshotUrl && (
+                            <a
+                              href={step.screenshotUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="mt-1 inline-block text-xs"
+                              style={{ color: C.accent, textDecoration: "underline" }}
+                            >
+                              View screenshot
+                            </a>
+                          )}
+                        </td>
+                        <td className="px-4 py-2.5" style={{ ...tdTop, color: C.muted, fontSize: 10, wordBreak: "break-all" }}>
+                          {step.url
+                            ? (() => { try { return new URL(step.url).pathname; } catch { return step.url; } })()
+                            : "—"}
                         </td>
                       </tr>
                     );
