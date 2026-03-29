@@ -212,9 +212,6 @@ export function AppSettingsModal({ environment }: { environment?: string }) {
                       </button>
                     ))}
                   </div>
-                  <p style={{ color: C.muted, fontSize: 10, marginTop: 4 }}>
-                    Configuration: stops after Save. Order: continues to place order.
-                  </p>
                 </div>
               )}
 
