@@ -8,7 +8,7 @@ import { NextRequest, NextResponse } from "next/server";
 export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => ({}));
   const submitted = body?.password ?? "";
-  const expected = process.env.SETTINGS_PASSWORD ?? "Agco2022!";
+  const expected = process.env.SETTINGS_PASSWORD ?? "Agco2022";
 
   if (!submitted || submitted !== expected) {
     return NextResponse.json({ error: "Invalid password" }, { status: 401 });
