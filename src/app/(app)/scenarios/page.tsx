@@ -61,7 +61,7 @@ export default function ScenariosPage() {
 
   const [name, setName] = useState("");
   const [vinText, setVinText] = useState("");
-  const [gcMap, setGcMap] = useState<Record<string, GcOption>>({});
+  const [gcOptions, setGcOptions] = useState<GcOption[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState("");
   const [gcDefault, setGcDefault] = useState<GcOption>("Standard");
@@ -97,11 +97,11 @@ export default function ScenariosPage() {
 
   function handleVinTextChange(val: string) {
     setVinText(val);
-    const parsed = parseVins(val);
-    setGcMap(prev => {
-      const next: Record<string, GcOption> = {};
-      for (const vin of parsed) next[vin] = prev[vin] ?? gcDefault;
-      return next;
+    const count = parseVins(val).length;
+    setGcOptions(prev => {
+      const next = [...prev];
+      while (next.length < count) next.push(gcDefault);
+      return next.slice(0, count);
     });
   }
 
@@ -110,7 +110,7 @@ export default function ScenariosPage() {
     setFormError("");
     const vins = parseVins(vinText);
     if (vins.length === 0) { setFormError("Enter at least one VIN"); return; }
-    const gc_options = vins.map(v => gcMap[v] ?? gcDefault);
+    const gc_options = vins.map((_, i) => gcOptions[i] ?? gcDefault);
 
     setSubmitting(true);
     try {
@@ -125,7 +125,7 @@ export default function ScenariosPage() {
       }
       setName("");
       setVinText("");
-      setGcMap({});
+      setGcOptions([]);
       await fetchScenarios();
     } catch (err) {
       setFormError(err instanceof Error ? err.message : "Something went wrong");
@@ -207,10 +207,10 @@ export default function ScenariosPage() {
             />
           </div>
 
-          {/* VINs textarea + GC buttons */}
+          {/* VINs textarea */}
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
             <label className="text-[10px] font-medium uppercase tracking-wider" style={{ color: C.secondary }}>
-              VINs &amp; Genuine Care
+              VINs
             </label>
             <textarea
               value={vinText}
@@ -222,21 +222,30 @@ export default function ScenariosPage() {
               onBlur={(e) => { e.currentTarget.style.borderColor = C.inputBdr; }}
             />
             <span style={{ color: C.muted, fontSize: 10 }}>{parseVins(vinText).length}/10 VINs</span>
-            {parseVins(vinText).length > 0 && (
-              <div style={{ display: "flex", flexDirection: "column", gap: 5, marginTop: 4 }}>
-                {parseVins(vinText).map((vin) => (
-                  <div key={vin} style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                    <span style={{ color: C.secondary, fontFamily: mono, fontSize: 11, width: 160, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{vin}</span>
+          </div>
+
+          {/* Genuine Care per VIN */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            <label className="text-[10px] font-medium uppercase tracking-wider" style={{ color: C.secondary }}>
+              Genuine Care
+            </label>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {parseVins(vinText).length === 0 ? (
+                <span style={{ color: C.muted, fontSize: 11, paddingTop: 7 }}>Enter VINs first</span>
+              ) : (
+                parseVins(vinText).map((vin, idx) => (
+                  <div key={idx} style={{ display: "flex", gap: 5, alignItems: "center" }}>
+                    <span style={{ color: C.muted, fontFamily: mono, fontSize: 10, width: 120, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{vin}</span>
                     {GC_OPTIONS.map((opt) => (
                       <button
                         key={opt}
                         type="button"
-                        onClick={() => setGcMap(prev => ({ ...prev, [vin]: opt as GcOption }))}
+                        onClick={() => setGcOptions(prev => { const next = [...prev]; next[idx] = opt as GcOption; return next; })}
                         style={{
                           padding: "3px 8px", fontFamily: mono, fontSize: 10,
-                          border: `1px solid ${(gcMap[vin] ?? gcDefault) === opt ? C.accent : C.inputBdr}`,
-                          background: (gcMap[vin] ?? gcDefault) === opt ? "rgba(59,130,246,0.15)" : C.inputBg,
-                          color: (gcMap[vin] ?? gcDefault) === opt ? C.accent : C.secondary,
+                          border: `1px solid ${(gcOptions[idx] ?? gcDefault) === opt ? C.accent : C.inputBdr}`,
+                          background: (gcOptions[idx] ?? gcDefault) === opt ? "rgba(59,130,246,0.15)" : C.inputBg,
+                          color: (gcOptions[idx] ?? gcDefault) === opt ? C.accent : C.secondary,
                           borderRadius: 3, cursor: "pointer",
                         }}
                       >
@@ -244,9 +253,9 @@ export default function ScenariosPage() {
                       </button>
                     ))}
                   </div>
-                ))}
-              </div>
-            )}
+                ))
+              )}
+            </div>
           </div>
 
           {/* Submit */}
