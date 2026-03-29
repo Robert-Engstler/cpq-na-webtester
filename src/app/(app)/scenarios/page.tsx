@@ -48,9 +48,6 @@ function Pagination({
   );
 }
 
-function parseVins(text: string): string[] {
-  return text.split(/\n/).map(v => v.trim().toUpperCase()).filter(v => v.length > 0).slice(0, 10);
-}
 
 export default function ScenariosPage() {
   const [scenarios, setScenarios] = useState<Scenario[]>([]);
@@ -60,7 +57,7 @@ export default function ScenariosPage() {
   const perPage = 5;
 
   const [name, setName] = useState("Test");
-  const [vinText, setVinText] = useState("");
+  const [vins, setVins] = useState<string[]>([""]);
   const [gcOptions, setGcOptions] = useState<GcOption[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState("");
@@ -95,36 +92,62 @@ export default function ScenariosPage() {
     fetchScenarios();
   }, []);
 
-  function handleVinTextChange(val: string) {
-    setVinText(val);
-    const count = parseVins(val).length;
+  const filledVins = vins.map((v, i) => ({ vin: v.trim().toUpperCase(), gc: gcOptions[i] ?? gcDefault }))
+    .filter(x => x.vin.length > 0);
+
+  function handleVinChange(idx: number, val: string) {
+    // Support paste of multiple VINs (newline-separated)
+    if (val.includes("\n")) {
+      const lines = val.split("\n").map(v => v.trim().toUpperCase()).filter(Boolean);
+      setVins(prev => {
+        const next = [...prev];
+        lines.forEach((line, i) => { if (idx + i < 10) next[idx + i] = line; });
+        if (next.filter(v => v.trim()).length === next.length && next.length < 10) next.push("");
+        return next;
+      });
+      setGcOptions(prev => {
+        const next = [...prev];
+        while (next.length < Math.min(idx + lines.length, 10)) next.push(gcDefault);
+        return next;
+      });
+      return;
+    }
+    const upper = val.toUpperCase();
+    setVins(prev => {
+      const next = [...prev];
+      next[idx] = upper;
+      // Ensure a trailing empty row exists for next entry (up to 10 filled)
+      const filled = next.filter(v => v.trim()).length;
+      if (filled === next.length && filled < 10) next.push("");
+      return next;
+    });
     setGcOptions(prev => {
       const next = [...prev];
-      while (next.length < count) next.push(gcDefault);
-      return next.slice(0, count);
+      while (next.length <= idx) next.push(gcDefault);
+      return next;
     });
   }
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
     setFormError("");
-    const vins = parseVins(vinText);
-    if (vins.length === 0) { setFormError("Enter at least one VIN"); return; }
-    const gc_options = vins.map((_, i) => gcOptions[i] ?? gcDefault);
+    if (filledVins.length === 0) { setFormError("Enter at least one VIN"); return; }
+    const vinArr = filledVins.map(x => x.vin);
+    const gc_options = filledVins.map(x => x.gc);
 
     setSubmitting(true);
     try {
       const res = await fetch("/api/scenarios", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, vins, gc_options }),
+        body: JSON.stringify({ name, vins: vinArr, gc_options }),
       });
       if (!res.ok) {
         const data = await res.json();
         throw new Error(data.error ?? "Failed to create scenario");
       }
-      setName("");
-      setVinText("");
+      setName("Test");
+      setVins([""]);
       setGcOptions([]);
       await fetchScenarios();
     } catch (err) {
@@ -207,54 +230,58 @@ export default function ScenariosPage() {
             />
           </div>
 
-          {/* VINs textarea */}
+          {/* VINs — one input per row */}
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
             <label className="text-[10px] font-medium uppercase tracking-wider" style={{ color: C.secondary }}>
               VINs
             </label>
-            <textarea
-              value={vinText}
-              onChange={(e) => handleVinTextChange(e.target.value)}
-              rows={4}
-              placeholder={"One VIN per line\n(max 10)"}
-              style={{ ...inputBase, width: 220, padding: "7px 10px", resize: "vertical" }}
-              onFocus={(e) => { e.currentTarget.style.borderColor = C.accent; }}
-              onBlur={(e) => { e.currentTarget.style.borderColor = C.inputBdr; }}
-            />
-            <span style={{ color: C.muted, fontSize: 10 }}>{parseVins(vinText).length}/10 VINs</span>
+            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              {vins.map((vin, idx) => (
+                <input
+                  key={idx}
+                  type="text"
+                  value={vin}
+                  onChange={(e) => handleVinChange(idx, e.target.value)}
+                  placeholder={idx === 0 ? "Enter or paste VINs" : ""}
+                  style={{ ...inputBase, width: 220, height: 28, padding: "0 10px" }}
+                  onFocus={(e) => { e.currentTarget.style.borderColor = C.accent; }}
+                  onBlur={(e) => { e.currentTarget.style.borderColor = C.inputBdr; }}
+                />
+              ))}
+            </div>
+            <span style={{ color: C.muted, fontSize: 10 }}>{filledVins.length}/10 VINs</span>
           </div>
 
-          {/* Genuine Care Types */}
+          {/* Genuine Care Types — aligned row-for-row with VIN inputs */}
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
             <label className="text-[10px] font-medium uppercase tracking-wider" style={{ color: C.secondary }}>
               Genuine Care Types
             </label>
-            <div style={{ display: "flex", flexDirection: "column", gap: 0, paddingTop: 7 }}>
-              {parseVins(vinText).length === 0 ? (
-                <span style={{ color: C.muted, fontSize: 11 }}>Enter VINs first</span>
-              ) : (
-                parseVins(vinText).map((_, idx) => (
-                  <div key={idx} style={{ display: "flex", gap: 5, alignItems: "center", height: 22, marginBottom: 2 }}>
-                    <span style={{ color: C.muted, fontFamily: mono, fontSize: 10, width: 14, textAlign: "right", flexShrink: 0 }}>{idx + 1}</span>
+            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              {vins.map((vin, idx) => {
+                const isEmpty = !vin.trim();
+                return (
+                  <div key={idx} style={{ display: "flex", gap: 5, alignItems: "center", height: 28, opacity: isEmpty ? 0.35 : 1 }}>
                     {GC_OPTIONS.map((opt) => (
                       <button
                         key={opt}
                         type="button"
+                        disabled={isEmpty}
                         onClick={() => setGcOptions(prev => { const next = [...prev]; next[idx] = opt as GcOption; return next; })}
                         style={{
                           padding: "2px 8px", fontFamily: mono, fontSize: 10,
                           border: `1px solid ${(gcOptions[idx] ?? gcDefault) === opt ? C.accent : C.inputBdr}`,
                           background: (gcOptions[idx] ?? gcDefault) === opt ? "rgba(59,130,246,0.15)" : C.inputBg,
                           color: (gcOptions[idx] ?? gcDefault) === opt ? C.accent : C.secondary,
-                          borderRadius: 3, cursor: "pointer",
+                          borderRadius: 3, cursor: isEmpty ? "default" : "pointer",
                         }}
                       >
                         {opt}
                       </button>
                     ))}
                   </div>
-                ))
-              )}
+                );
+              })}
             </div>
           </div>
 
