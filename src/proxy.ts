@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const PUBLIC_PATHS = ["/login", "/api/auth", "/api/runs/webhook"];
+const PUBLIC_PATHS = ["/login", "/api/auth", "/api/runs/webhook", "/api/settings/verify", "/api/settings/login-defaults"];
 
 async function expectedCookieValue(): Promise<string> {
   const secret = process.env.AUTH_SECRET ?? "";
