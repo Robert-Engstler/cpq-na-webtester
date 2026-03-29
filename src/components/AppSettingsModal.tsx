@@ -113,12 +113,12 @@ export function AppSettingsModal({ environment }: { environment?: string }) {
     return (
       <button
         onClick={handleOpen}
-        title="Runner Settings"
-        style={{ color: C.muted, background: "none", border: "none", cursor: "pointer", padding: "0 4px", fontSize: 16 }}
-        onMouseEnter={(e) => { e.currentTarget.style.color = C.primary; }}
-        onMouseLeave={(e) => { e.currentTarget.style.color = C.muted; }}
+        className="text-sm font-medium transition-colors"
+        style={{ color: C.secondary, background: "none", border: "none", cursor: "pointer", padding: 0, fontFamily: "inherit" }}
+        onMouseEnter={(e) => { e.currentTarget.style.color = C.accent; }}
+        onMouseLeave={(e) => { e.currentTarget.style.color = C.secondary; }}
       >
-        ⚙
+        Settings
       </button>
     );
   }
@@ -287,12 +287,10 @@ export function AppSettingsModal({ environment }: { environment?: string }) {
       {/* Trigger button (rendered outside modal so nav still shows it) */}
       <button
         onClick={handleOpen}
-        title="Runner Settings"
-        style={{ color: C.muted, background: "none", border: "none", cursor: "pointer", padding: "0 4px", fontSize: 16 }}
-        onMouseEnter={(e) => { e.currentTarget.style.color = C.primary; }}
-        onMouseLeave={(e) => { e.currentTarget.style.color = C.muted; }}
+        className="text-sm font-medium transition-colors"
+        style={{ color: C.accent, background: "none", border: "none", cursor: "pointer", padding: 0, fontFamily: "inherit" }}
       >
-        ⚙
+        Settings
       </button>
     </>
   );

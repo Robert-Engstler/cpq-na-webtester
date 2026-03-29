@@ -43,9 +43,9 @@ export function Nav({ environment }: { environment?: string }) {
             {label}
           </Link>
         ))}
+        <AppSettingsModal environment={environment} />
       </div>
       <div className="flex items-center gap-3">
-        <AppSettingsModal environment={environment} />
         <button
           onClick={handleLogout}
           className="text-sm"
