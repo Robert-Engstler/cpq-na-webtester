@@ -49,7 +49,7 @@ function Pagination({
 }
 
 function parseVins(text: string): string[] {
-  return text.split(/[,\n]/).map(v => v.trim().toUpperCase()).filter(v => v.length > 0).slice(0, 10);
+  return text.split(/\n/).map(v => v.trim().toUpperCase()).filter(v => v.length > 0).slice(0, 10);
 }
 
 export default function ScenariosPage() {
@@ -216,7 +216,7 @@ export default function ScenariosPage() {
               value={vinText}
               onChange={(e) => handleVinTextChange(e.target.value)}
               rows={4}
-              placeholder={"VIN1, VIN2\nor one per line\nmax 10"}
+              placeholder={"One VIN per line\n(max 10)"}
               style={{ ...inputBase, width: 220, padding: "7px 10px", resize: "vertical" }}
               onFocus={(e) => { e.currentTarget.style.borderColor = C.accent; }}
               onBlur={(e) => { e.currentTarget.style.borderColor = C.inputBdr; }}
@@ -224,25 +224,24 @@ export default function ScenariosPage() {
             <span style={{ color: C.muted, fontSize: 10 }}>{parseVins(vinText).length}/10 VINs</span>
           </div>
 
-          {/* Genuine Care per VIN */}
+          {/* Genuine Care Types */}
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
             <label className="text-[10px] font-medium uppercase tracking-wider" style={{ color: C.secondary }}>
-              Genuine Care
+              Genuine Care Types
             </label>
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 0, paddingTop: 7 }}>
               {parseVins(vinText).length === 0 ? (
-                <span style={{ color: C.muted, fontSize: 11, paddingTop: 7 }}>Enter VINs first</span>
+                <span style={{ color: C.muted, fontSize: 11 }}>Enter VINs first</span>
               ) : (
-                parseVins(vinText).map((vin, idx) => (
-                  <div key={idx} style={{ display: "flex", gap: 5, alignItems: "center" }}>
-                    <span style={{ color: C.muted, fontFamily: mono, fontSize: 10, width: 120, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{vin}</span>
+                parseVins(vinText).map((_, idx) => (
+                  <div key={idx} style={{ display: "flex", gap: 5, alignItems: "center", height: 22, marginBottom: 2 }}>
                     {GC_OPTIONS.map((opt) => (
                       <button
                         key={opt}
                         type="button"
                         onClick={() => setGcOptions(prev => { const next = [...prev]; next[idx] = opt as GcOption; return next; })}
                         style={{
-                          padding: "3px 8px", fontFamily: mono, fontSize: 10,
+                          padding: "2px 8px", fontFamily: mono, fontSize: 10,
                           border: `1px solid ${(gcOptions[idx] ?? gcDefault) === opt ? C.accent : C.inputBdr}`,
                           background: (gcOptions[idx] ?? gcDefault) === opt ? "rgba(59,130,246,0.15)" : C.inputBg,
                           color: (gcOptions[idx] ?? gcDefault) === opt ? C.accent : C.secondary,
