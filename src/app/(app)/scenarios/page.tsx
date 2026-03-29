@@ -235,6 +235,7 @@ export default function ScenariosPage() {
               ) : (
                 parseVins(vinText).map((_, idx) => (
                   <div key={idx} style={{ display: "flex", gap: 5, alignItems: "center", height: 22, marginBottom: 2 }}>
+                    <span style={{ color: C.muted, fontFamily: mono, fontSize: 10, width: 14, textAlign: "right", flexShrink: 0 }}>{idx + 1}</span>
                     {GC_OPTIONS.map((opt) => (
                       <button
                         key={opt}
