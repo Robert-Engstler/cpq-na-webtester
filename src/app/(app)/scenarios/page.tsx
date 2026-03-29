@@ -96,27 +96,10 @@ export default function ScenariosPage() {
     .filter(x => x.vin.length > 0);
 
   function handleVinChange(idx: number, val: string) {
-    // Support paste of multiple VINs (newline-separated)
-    if (val.includes("\n")) {
-      const lines = val.split("\n").map(v => v.trim().toUpperCase()).filter(Boolean);
-      setVins(prev => {
-        const next = [...prev];
-        lines.forEach((line, i) => { if (idx + i < 10) next[idx + i] = line; });
-        if (next.filter(v => v.trim()).length === next.length && next.length < 10) next.push("");
-        return next;
-      });
-      setGcOptions(prev => {
-        const next = [...prev];
-        while (next.length < Math.min(idx + lines.length, 10)) next.push(gcDefault);
-        return next;
-      });
-      return;
-    }
     const upper = val.toUpperCase();
     setVins(prev => {
       const next = [...prev];
       next[idx] = upper;
-      // Ensure a trailing empty row exists for next entry (up to 10 filled)
       const filled = next.filter(v => v.trim()).length;
       if (filled === next.length && filled < 10) next.push("");
       return next;
@@ -124,6 +107,25 @@ export default function ScenariosPage() {
     setGcOptions(prev => {
       const next = [...prev];
       while (next.length <= idx) next.push(gcDefault);
+      return next;
+    });
+  }
+
+  function handleVinPaste(idx: number, e: React.ClipboardEvent<HTMLInputElement>) {
+    const text = e.clipboardData.getData("text");
+    // Split on newlines (Excel uses \r\n, plain text uses \n)
+    const lines = text.split(/\r?\n/).map(v => v.trim().toUpperCase()).filter(Boolean);
+    if (lines.length <= 1) return; // single value — let default paste handle it
+    e.preventDefault();
+    setVins(prev => {
+      const next = [...prev];
+      lines.forEach((line, i) => { if (idx + i < 10) next[idx + i] = line; });
+      if (next.filter(v => v.trim()).length === next.length && next.length < 10) next.push("");
+      return next;
+    });
+    setGcOptions(prev => {
+      const next = [...prev];
+      while (next.length < Math.min(idx + lines.length, 10)) next.push(gcDefault);
       return next;
     });
   }
@@ -242,6 +244,7 @@ export default function ScenariosPage() {
                   type="text"
                   value={vin}
                   onChange={(e) => handleVinChange(idx, e.target.value)}
+                  onPaste={(e) => handleVinPaste(idx, e)}
                   placeholder={idx === 0 ? "Enter or paste VINs" : ""}
                   style={{ ...inputBase, width: 220, height: 28, padding: "0 10px" }}
                   onFocus={(e) => { e.currentTarget.style.borderColor = C.accent; }}
