@@ -19,8 +19,7 @@ type Run = {
   scenario_id: string;
   scenario_name: string;
   vins: string[];
-  language: string;
-  status: "pending" | "complete" | "failed";
+  status: "pending" | "complete" | "failed" | "stopped";
   result_json: StepResult[] | null;
   pdf_url: string | null;
   created_at: string;
@@ -93,7 +92,7 @@ function StatusBadge({ status }: { status: Run["status"] }) {
           }}
         />
       )}
-      <span style={{ position: "relative" }}>{({ pending: "running", complete: "completed" } as Record<string, string>)[status] ?? status}</span>
+      <span style={{ position: "relative" }}>{({ pending: "running", complete: "completed", stopped: "stopped", failed: "failed" } as Record<string, string>)[status] ?? status}</span>
     </span>
   );
 }
@@ -172,7 +171,7 @@ function matchVinFromStep(stepText: string, vins: string[]): string | null {
 
 /** Determine VIN color based on steps in result_json */
 function vinColor(vin: string, status: Run["status"], steps: StepResult[] | null, vins: string[]): string {
-  if (status === "pending") return C.muted;
+  if (status === "pending" || status === "stopped") return C.muted;
   if (!steps || steps.length === 0) return status === "failed" ? C.danger : C.muted;
   const vinSteps = steps.filter((s) => matchVinFromStep(s.step, [vin]) === vin);
   if (vinSteps.length === 0) return C.muted;

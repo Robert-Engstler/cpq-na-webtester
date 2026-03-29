@@ -11,8 +11,7 @@ export async function GET(
     SELECT
       r.*,
       s.name  AS scenario_name,
-      s.vins,
-      s.language
+      s.vins
     FROM test_runs r
     JOIN scenarios s ON r.scenario_id = s.id
     WHERE r.id = ${id}
