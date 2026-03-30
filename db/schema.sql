@@ -4,14 +4,17 @@
 
 -- Singleton row: runner settings (persists across logout)
 CREATE TABLE IF NOT EXISTS app_settings (
-  id              INTEGER PRIMARY KEY DEFAULT 1,
-  gc_default      TEXT NOT NULL DEFAULT 'Standard',       -- Annual | Standard | Parts-Only
-  annual_duration INTEGER NOT NULL DEFAULT 60,            -- 12 | 24 | 36 | 48 | 60
-  svc_preset      TEXT NOT NULL DEFAULT 'Minimum',        -- Minimum | Medium | Maximum
-  stage_endpoint  TEXT NOT NULL DEFAULT 'Configuration',  -- Configuration | Order
+  id               INTEGER PRIMARY KEY DEFAULT 1,
+  gc_default       TEXT    NOT NULL DEFAULT 'Standard',       -- Annual | Standard | Parts-Only
+  annual_duration  INTEGER NOT NULL DEFAULT 60,               -- 12 | 24 | 36 | 48 | 60
+  svc_preset       TEXT    NOT NULL DEFAULT 'Minimum',        -- Minimum | Medium | Maximum
+  stage_endpoint   TEXT    NOT NULL DEFAULT 'Configuration',  -- Configuration | Order
+  show_svc_column  BOOLEAN NOT NULL DEFAULT false,            -- show Service Condition column in Scenarios form
   CONSTRAINT app_settings_single_row CHECK (id = 1)
 );
 INSERT INTO app_settings (id) VALUES (1) ON CONFLICT DO NOTHING;
+-- New columns added after initial deploy (idempotent)
+ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS show_svc_column BOOLEAN NOT NULL DEFAULT false;
 
 -- Login defaults: one row per Environment+Brand+Country combination (up to 8 rows)
 -- Pre-fills the login form when the user selects a specific combination
@@ -31,8 +34,10 @@ CREATE TABLE IF NOT EXISTS scenarios (
   name        TEXT NOT NULL,
   vins        TEXT[] NOT NULL,
   gc_options  TEXT[] NOT NULL,  -- Annual | Standard | Parts-Only, one per VIN
+  svc_options TEXT[],           -- per-VIN: duration string ("60") for Annual, preset ("Minimum") for Standard/Parts-Only
   created_at  TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+ALTER TABLE scenarios ADD COLUMN IF NOT EXISTS svc_options TEXT[];
 
 -- Test runs: one entry per triggered test execution
 CREATE TABLE IF NOT EXISTS test_runs (

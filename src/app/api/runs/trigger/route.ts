@@ -80,6 +80,7 @@ export async function POST(request: NextRequest) {
           gc_default:      settings.gc_default,
           annual_duration: String(settings.annual_duration),
           svc_preset:      settings.svc_preset,
+          svc_options:     scenario.svc_options ? (scenario.svc_options as string[]).join(",") : "",
         },
       }),
     }

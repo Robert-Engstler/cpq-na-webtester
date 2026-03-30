@@ -27,6 +27,10 @@ export async function POST() {
       )
     `;
 
+    // New columns added after initial deploy
+    await sql`ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS show_svc_column BOOLEAN NOT NULL DEFAULT false`;
+    await sql`ALTER TABLE scenarios ADD COLUMN IF NOT EXISTS svc_options TEXT[]`;
+
     return NextResponse.json({ ok: true, message: "Migration complete" });
   } catch (err) {
     console.error("Migration error:", err);

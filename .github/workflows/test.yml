@@ -55,6 +55,11 @@ on:
         required: false
         type: string
         default: "Minimum"
+      svc_options:
+        description: "Comma-separated per-VIN service conditions (parallel to vins): duration for Annual, preset for Standard/Parts-Only"
+        required: false
+        type: string
+        default: ""
 
 jobs:
   run-test:
@@ -100,6 +105,7 @@ jobs:
           GC_DEFAULT:            ${{ inputs.gc_default }}
           ANNUAL_DURATION:       ${{ inputs.annual_duration }}
           SVC_PRESET:            ${{ inputs.svc_preset }}
+          SVC_OPTIONS:           ${{ inputs.svc_options }}
           WEBHOOK_URL:           ${{ secrets.WEBHOOK_URL }}
           WEBHOOK_SECRET:        ${{ secrets.WEBHOOK_SECRET }}
           BLOB_READ_WRITE_TOKEN: ${{ secrets.BLOB_READ_WRITE_TOKEN }}

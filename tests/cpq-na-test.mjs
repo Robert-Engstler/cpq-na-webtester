@@ -20,6 +20,7 @@
  *   GC_DEFAULT        - Default GC type (fallback if not in GC_OPTIONS)
  *   ANNUAL_DURATION   - Duration months for Annual (default: 60)
  *   SVC_PRESET        - Minimum | Medium | Maximum (default: Minimum)
+ *   SVC_OPTIONS       - Comma-separated per-VIN overrides, parallel to VINS (duration for Annual, preset for Standard/Parts-Only)
  *   WEBHOOK_URL       - Full URL to POST results to
  *   WEBHOOK_SECRET    - Bearer token for webhook auth
  *   BLOB_READ_WRITE_TOKEN - Vercel Blob token
@@ -41,7 +42,8 @@ try {
 } catch { /* .env.local not present in CI */ }
 
 const vinList = (process.env.VINS ?? "").split(",").map(v => v.trim()).filter(Boolean);
-const gcList = (process.env.GC_OPTIONS ?? "").split(",").map(g => g.trim()).filter(Boolean);
+const gcList  = (process.env.GC_OPTIONS  ?? "").split(",").map(g => g.trim()).filter(Boolean);
+const svcList = (process.env.SVC_OPTIONS ?? "").split(",").map(s => s.trim());
 const RUN_ID          = process.env.RUN_ID;
 const CPQ_URL         = process.env.CPQ_URL ?? "";
 const CPQ_USERNAME    = process.env.CPQ_USERNAME ?? "";
@@ -271,6 +273,9 @@ async function run() {
     for (let vinIdx = 0; vinIdx < vinList.length; vinIdx++) {
       const VIN = vinList[vinIdx];
       const gcOption = gcList[vinIdx] ?? process.env.GC_DEFAULT ?? "Standard";
+      const svcOverride = svcList[vinIdx] ?? "";
+      const vinAnnualDuration = (gcOption === "Annual" && svcOverride) ? svcOverride : ANNUAL_DURATION;
+      const vinSvcPreset = (gcOption !== "Annual" && svcOverride) ? svcOverride : SVC_PRESET;
       const prefix = `[${VIN}]`;
       console.log(`\n── Processing ${VIN} (${gcOption}) ──`);
 
@@ -398,10 +403,10 @@ async function run() {
             const durationSelect = vinPage.locator("select").filter({ hasText: /duration/i })
               .or(vinPage.locator("select[name*='duration'], select[id*='duration']")).first();
             if (await durationSelect.count() > 0) {
-              await durationSelect.selectOption(String(ANNUAL_DURATION));
+              await durationSelect.selectOption(String(vinAnnualDuration));
               await vinPage.waitForTimeout(500);
               await waitForSpinner();
-              console.log(`  Annual Duration: ${ANNUAL_DURATION}`);
+              console.log(`  Annual Duration: ${vinAnnualDuration}`);
             }
           } else {
             // ── Standard / Parts-Only: apply SVC_PRESET ───────────────────────
@@ -426,14 +431,14 @@ async function run() {
                     [...sel.options].filter(o => o.value.trim()).map(o => o.value))
                 : ["12", "24", "36", "48", "60"];
 
-              const preset = resolvePreset(SVC_PRESET, startOpts, lastOpts, durOpts);
+              const preset = resolvePreset(vinSvcPreset, startOpts, lastOpts, durOpts);
 
               // Start Service
               if (preset.start && startOpts.length > 0) {
                 await allSelects.nth(0).selectOption(preset.start);
                 await vinPage.waitForTimeout(500);
                 await waitForSpinner();
-                console.log(`  Start Service: ${preset.start} (${SVC_PRESET})`);
+                console.log(`  Start Service: ${preset.start} (${vinSvcPreset})`);
               }
 
               // Last Service
@@ -441,7 +446,7 @@ async function run() {
                 await allSelects.nth(1).selectOption(preset.last);
                 await vinPage.waitForTimeout(500);
                 await waitForSpinner();
-                console.log(`  Last Service: ${preset.last} (${SVC_PRESET})`);
+                console.log(`  Last Service: ${preset.last} (${vinSvcPreset})`);
               }
 
               // Duration
@@ -449,7 +454,7 @@ async function run() {
                 await allSelects.nth(2).selectOption(preset.duration);
                 await vinPage.waitForTimeout(500);
                 await waitForSpinner();
-                console.log(`  Duration: ${preset.duration} (${SVC_PRESET})`);
+                console.log(`  Duration: ${preset.duration} (${vinSvcPreset})`);
               }
             }
 

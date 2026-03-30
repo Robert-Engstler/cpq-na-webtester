@@ -13,7 +13,7 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   const body = await request.json();
-  const { name, vins, gc_options } = body;
+  const { name, vins, gc_options, svc_options } = body;
 
   if (!name || !vins || !gc_options) {
     return NextResponse.json({ error: "name, vins, and gc_options are required" }, { status: 400 });
@@ -32,16 +32,29 @@ export async function POST(request: NextRequest) {
   if (cleaned.length === 0) {
     return NextResponse.json({ error: "At least one non-empty VIN is required" }, { status: 400 });
   }
+  if (svc_options != null && (!Array.isArray(svc_options) || svc_options.length !== cleaned.length)) {
+    return NextResponse.json({ error: "svc_options must have the same length as vins" }, { status: 400 });
+  }
 
-  // @vercel/postgres sql`` doesn't accept JS arrays directly —
-  // convert to Postgres array literal format: {val1,val2,...}
   const vinsLiteral = `{${cleaned.join(",")}}`;
-  const gcLiteral = `{${gc_options.join(",")}}`;
+  const gcLiteral   = `{${gc_options.join(",")}}`;
+  const svcLiteral  = Array.isArray(svc_options) && svc_options.length > 0
+    ? `{${(svc_options as string[]).join(",")}}`
+    : null;
 
-  const { rows } = await sql`
-    INSERT INTO scenarios (name, vins, gc_options)
-    VALUES (${name}, ${vinsLiteral}::text[], ${gcLiteral}::text[])
-    RETURNING *
-  `;
+  let rows;
+  if (svcLiteral) {
+    ({ rows } = await sql`
+      INSERT INTO scenarios (name, vins, gc_options, svc_options)
+      VALUES (${name}, ${vinsLiteral}::text[], ${gcLiteral}::text[], ${svcLiteral}::text[])
+      RETURNING *
+    `);
+  } else {
+    ({ rows } = await sql`
+      INSERT INTO scenarios (name, vins, gc_options)
+      VALUES (${name}, ${vinsLiteral}::text[], ${gcLiteral}::text[])
+      RETURNING *
+    `);
+  }
   return NextResponse.json(rows[0], { status: 201 });
 }

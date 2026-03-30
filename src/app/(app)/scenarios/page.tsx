@@ -13,6 +13,7 @@ type Scenario = {
   name: string;
   vins: string[];
   gc_options: string[];
+  svc_options?: string[];
   created_at: string;
 };
 
@@ -59,6 +60,10 @@ export default function ScenariosPage() {
   const [name, setName] = useState("Test");
   const [vins, setVins] = useState<string[]>([""]);
   const [gcOptions, setGcOptions] = useState<GcOption[]>([]);
+  const [svcOptions, setSvcOptions] = useState<string[]>([]);
+  const [showSvcColumn, setShowSvcColumn] = useState(false);
+  const [annualDuration, setAnnualDuration] = useState(60);
+  const [svcPreset, setSvcPreset] = useState("Minimum");
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState("");
   const [gcDefault, setGcDefault] = useState<GcOption>("Standard");
@@ -79,7 +84,7 @@ export default function ScenariosPage() {
     }
   }
 
-  // Load app_settings to get gc_default
+  // Load app_settings
   useEffect(() => {
     fetch("/api/settings/app")
       .then((r) => r.json())
@@ -87,13 +92,22 @@ export default function ScenariosPage() {
         if (d.gc_default && GC_OPTIONS.includes(d.gc_default as GcOption)) {
           setGcDefault(d.gc_default as GcOption);
         }
+        if (d.annual_duration) setAnnualDuration(Number(d.annual_duration));
+        if (d.svc_preset) setSvcPreset(d.svc_preset);
+        setShowSvcColumn(Boolean(d.show_svc_column));
       })
       .catch(() => {});
     fetchScenarios();
   }, []);
 
-  const filledVins = vins.map((v, i) => ({ vin: v.trim().toUpperCase(), gc: gcOptions[i] ?? gcDefault }))
-    .filter(x => x.vin.length > 0);
+  function svcDefault(gc: GcOption): string {
+    return gc === "Annual" ? String(annualDuration) : svcPreset;
+  }
+
+  const filledVins = vins.map((v, i) => {
+    const gc = gcOptions[i] ?? gcDefault;
+    return { vin: v.trim().toUpperCase(), gc, svc: svcOptions[i] ?? svcDefault(gc) };
+  }).filter(x => x.vin.length > 0);
 
   function handleVinChange(idx: number, val: string) {
     const upper = val.toUpperCase();
@@ -107,6 +121,21 @@ export default function ScenariosPage() {
     setGcOptions(prev => {
       const next = [...prev];
       while (next.length <= idx) next.push(gcDefault);
+      return next;
+    });
+    setSvcOptions(prev => {
+      const next = [...prev];
+      while (next.length <= idx) next.push(svcDefault(gcOptions[next.length] ?? gcDefault));
+      return next;
+    });
+  }
+
+  function handleGcChange(idx: number, opt: GcOption) {
+    setGcOptions(prev => { const next = [...prev]; next[idx] = opt; return next; });
+    // Reset svc to appropriate default when GC type changes
+    setSvcOptions(prev => {
+      const next = [...prev];
+      next[idx] = svcDefault(opt);
       return next;
     });
   }
@@ -128,6 +157,11 @@ export default function ScenariosPage() {
       while (next.length < Math.min(idx + lines.length, 10)) next.push(gcDefault);
       return next;
     });
+    setSvcOptions(prev => {
+      const next = [...prev];
+      while (next.length < Math.min(idx + lines.length, 10)) next.push(svcDefault(gcDefault));
+      return next;
+    });
   }
 
   async function handleCreate(e: React.FormEvent) {
@@ -136,13 +170,14 @@ export default function ScenariosPage() {
     if (filledVins.length === 0) { setFormError("Enter at least one VIN"); return; }
     const vinArr = filledVins.map(x => x.vin);
     const gc_options = filledVins.map(x => x.gc);
+    const svc_options = filledVins.map(x => x.svc);
 
     setSubmitting(true);
     try {
       const res = await fetch("/api/scenarios", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, vins: vinArr, gc_options }),
+        body: JSON.stringify({ name, vins: vinArr, gc_options, svc_options }),
       });
       if (!res.ok) {
         const data = await res.json();
@@ -151,6 +186,7 @@ export default function ScenariosPage() {
       setName("Test");
       setVins([""]);
       setGcOptions([]);
+      setSvcOptions([]);
       await fetchScenarios();
     } catch (err) {
       setFormError(err instanceof Error ? err.message : "Something went wrong");
@@ -221,12 +257,13 @@ export default function ScenariosPage() {
             <label className="text-[10px] font-medium uppercase tracking-wider" style={{ color: C.secondary }}>
               Description
             </label>
-            <textarea
+            <input
+              type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
               required
               style={{
-                ...inputBase, width: 220, padding: "7px 10px", resize: "none",
+                ...inputBase, width: 220, padding: "0 10px",
                 height: vins.length * 28 + Math.max(0, vins.length - 1) * 4,
               }}
               onFocus={(e) => { e.currentTarget.style.borderColor = C.accent; }}
@@ -265,6 +302,7 @@ export default function ScenariosPage() {
             <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
               {vins.map((vin, idx) => {
                 const isEmpty = !vin.trim();
+                const currentGc = gcOptions[idx] ?? gcDefault;
                 return (
                   <div key={idx} style={{ display: "flex", gap: 5, alignItems: "center", height: 28, opacity: isEmpty ? 0.35 : 1 }}>
                     {GC_OPTIONS.map((opt) => (
@@ -272,12 +310,12 @@ export default function ScenariosPage() {
                         key={opt}
                         type="button"
                         disabled={isEmpty}
-                        onClick={() => setGcOptions(prev => { const next = [...prev]; next[idx] = opt as GcOption; return next; })}
+                        onClick={() => handleGcChange(idx, opt as GcOption)}
                         style={{
                           padding: "2px 8px", fontFamily: mono, fontSize: 10,
-                          border: `1px solid ${(gcOptions[idx] ?? gcDefault) === opt ? C.accent : C.inputBdr}`,
-                          background: (gcOptions[idx] ?? gcDefault) === opt ? "rgba(59,130,246,0.15)" : C.inputBg,
-                          color: (gcOptions[idx] ?? gcDefault) === opt ? C.accent : C.secondary,
+                          border: `1px solid ${currentGc === opt ? C.accent : C.inputBdr}`,
+                          background: currentGc === opt ? "rgba(59,130,246,0.15)" : C.inputBg,
+                          color: currentGc === opt ? C.accent : C.secondary,
                           borderRadius: 3, cursor: isEmpty ? "default" : "pointer",
                         }}
                       >
@@ -289,6 +327,45 @@ export default function ScenariosPage() {
               })}
             </div>
           </div>
+
+          {/* Service Condition — only shown when toggle is on */}
+          {showSvcColumn && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              <label className="text-[10px] font-medium uppercase tracking-wider" style={{ color: C.secondary }}>
+                Service Condition
+              </label>
+              <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                {vins.map((vin, idx) => {
+                  const isEmpty = !vin.trim();
+                  const currentGc = gcOptions[idx] ?? gcDefault;
+                  const currentSvc = svcOptions[idx] ?? svcDefault(currentGc);
+                  const options = currentGc === "Annual"
+                    ? ["12", "24", "36", "48", "60"]
+                    : ["Minimum", "Medium", "Maximum"];
+                  return (
+                    <div key={idx} style={{ height: 28, display: "flex", alignItems: "center", opacity: isEmpty ? 0.35 : 1 }}>
+                      <select
+                        disabled={isEmpty}
+                        value={currentSvc}
+                        onChange={(e) => setSvcOptions(prev => { const next = [...prev]; next[idx] = e.target.value; return next; })}
+                        style={{
+                          ...inputBase, height: 28, padding: "0 6px",
+                          width: currentGc === "Annual" ? 80 : 96,
+                          cursor: isEmpty ? "default" : "pointer",
+                        }}
+                      >
+                        {options.map(o => (
+                          <option key={o} value={o}>
+                            {currentGc === "Annual" ? `${o} mo` : o}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {/* Submit */}
           <div style={{ paddingTop: 18 }}>
@@ -358,6 +435,17 @@ export default function ScenariosPage() {
                           }}>
                             {s.gc_options[idx] ?? "Standard"}
                           </span>
+                          {showSvcColumn && s.svc_options?.[idx] && (
+                            <span style={{
+                              color: C.muted, fontSize: 10,
+                              border: `1px solid ${C.border}`, borderRadius: 2,
+                              padding: "1px 5px",
+                            }}>
+                              {(s.gc_options[idx] ?? "Standard") === "Annual"
+                                ? `${s.svc_options[idx]} mo`
+                                : s.svc_options[idx]}
+                            </span>
+                          )}
                         </div>
                       ))}
                     </div>

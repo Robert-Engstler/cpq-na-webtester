@@ -15,7 +15,8 @@ export async function GET() {
  */
 export async function PUT(request: NextRequest) {
   const body = await request.json().catch(() => ({}));
-  const { gc_default, annual_duration, svc_preset, stage_endpoint } = body;
+
+  const { gc_default, annual_duration, svc_preset, stage_endpoint, show_svc_column } = body;
 
   const validGc = ["Annual", "Standard", "Parts-Only"];
   const validDurations = [12, 24, 36, 48, 60];
@@ -35,12 +36,15 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ error: "Invalid stage_endpoint" }, { status: 400 });
   }
 
+  const showSvc = show_svc_column != null ? Boolean(show_svc_column) : null;
+
   await sql`
     UPDATE app_settings SET
-      gc_default      = COALESCE(${gc_default ?? null}, gc_default),
-      annual_duration = COALESCE(${annual_duration != null ? Number(annual_duration) : null}, annual_duration),
-      svc_preset      = COALESCE(${svc_preset ?? null}, svc_preset),
-      stage_endpoint  = COALESCE(${stage_endpoint ?? null}, stage_endpoint)
+      gc_default       = COALESCE(${gc_default ?? null}, gc_default),
+      annual_duration  = COALESCE(${annual_duration != null ? Number(annual_duration) : null}, annual_duration),
+      svc_preset       = COALESCE(${svc_preset ?? null}, svc_preset),
+      stage_endpoint   = COALESCE(${stage_endpoint ?? null}, stage_endpoint),
+      show_svc_column  = COALESCE(${showSvc}, show_svc_column)
     WHERE id = 1
   `;
 
