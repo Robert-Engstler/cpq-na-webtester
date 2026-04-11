@@ -7,7 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "docs": "pandoc docs/cpq-na-webtester.md -o docs/cpq-na-webtester.docx"
+    "docs": "pandoc docs/cpq-na-webtester.md -o docs/cpq-na-webtester.docx",
+    "summary": "node scripts/update-summary.mjs",
+    "s": "node scripts/update-summary.mjs"
   },
   "dependencies": {
     "@vercel/postgres": "^0.10.0",

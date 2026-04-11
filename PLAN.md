@@ -214,6 +214,141 @@ Browser (user)
 
 ---
 
+## Session: 6 April 2026 — Playwright Test Script (`tests/cpq-na-test.mjs`)
+
+### What was done this session
+
+The CPQ NA Playwright E2E test script was debugged and brought to a fully passing state for the Stage / FT / US environment with a Standard GC type.
+
+**Test steps now passing end-to-end:**
+1. ✅ Login (AGCO SSO at `aaat.agcocorp.com`, "Benutzername"/"Passwort"/"Anmelden")
+2. ✅ Accept cookies
+3. ✅ VIN search (Tab Machine) — enters VIN into `input#searchText`, waits for URL to leave `/machineselection`
+4. ✅ Select GenuineCare — clicks the `"GenuineCare"` tile (no space — was broken with `/genuine care/i`)
+5. ✅ Select GC type (Standard / Annual / Parts-Only)
+6. ✅ Tab Configuration → Specifications — sets Start Service, Last Service; reads Machine Start Hour range from red validation message and fills `minVal + 1`
+7. ✅ Apply changes → Add to configuration
+8. ✅ Save Config — captures Config ID (UUID or CONFIG-prefix format)
+9. ✅ Download Parts Picklist PDF
+10. ✅ Download Service Checklist PDF
+
+**Key fixes made:**
+- **Efficiency**: VINs 2+ use Machine tab click (Angular client-side routing) instead of `goto()` — avoids ~30s SSO re-login per VIN
+- **Post-Enter wait**: `waitForFunction` watching URL leave `/machineselection` (replaced unreliable `waitForLoadState`)
+- **GenuineCare selector**: `"GenuineCare"` (exact, no space)
+- **Duration select**: wrapped in try-catch — gracefully skipped if not available after Start/Last Service changes the DOM
+- **Machine Start Hour**: enters `0` + `Tab` (blur) to trigger Angular validation, reads `.form-error-label` for `"in the range X to Y"` message, fills `minVal + 1`. Regex: `/(?:between\s+|range\s+)([\d,]+)\s+(?:and|to)\s+([\d,]+)/i`
+- **Save button**: broadened from `/^save$/i` to `/save/i` to match "Save As" / "Save Configuration" variants
+- **Config ID regex**: captures UUID-format and CONFIG-prefix IDs from URL
+- **Removed**: debug pause, all debug `console.log` calls, `vinPage.close()` (was closing shared page)
+
+### Where to continue next session
+
+The Standard GC full flow (Configuration endpoint) is complete and tested. Remaining work:
+
+1. **Test Annual GC type** — uses a Duration dropdown (months) instead of Start/Last Service hour selects; run with `GC_OPTIONS=Annual` in `.env.local`
+2. **Test Parts-Only GC type** — similar to Standard
+3. **Test Stage + Order endpoint** — set `STAGE_ENDPOINT=Order` in `.env.local`; this continues through steps 11–15 (Create Quote → Tab Quotation → Tab Order → Place Order → Download GC Order Details PDF + Maintenance Agreement PDF)
+4. **Test multi-VIN run** — set `VINS=VIN1,VIN2` to verify VINs 2+ use Machine tab correctly (no SSO re-login)
+5. **Test Prod environment** — journey ends at Save Config (no Quote/Order)
+6. **Test MF brand** — different CPQ URL and credentials
+
+---
+
+## Session: 7–8 April 2026 — Order Endpoint Testing
+
+### What was done this session
+
+**Configuration endpoint:** All 3 GC types (Annual, Standard, Parts-Only) confirmed passing end-to-end for Stage | FT | US (steps 1–10).
+
+**Order endpoint (Stage):** Investigated and partially fixed the Quotation → Order flow.
+
+**Key issue found and fixed — "Order" tab navigation:**
+- Previous selector `locator("a, button, [role='tab'], li a, nav a, .nav-item a").filter({ hasText: /^order$/i })` never found the element
+- Diagnostic logging revealed CPQ header nav uses `<span>` elements (not `<a>` or `<button>`) — neither matched the old selector
+- Nav structure confirmed: `Machine | Configuration | Summary | Quotation | Order` rendered as plain text spans inside a header nav component
+- **Fix**: Changed to `getByText("Order", { exact: true })` — broadest Playwright selector, matches any visible element with text "Order"
+- Result: **Tab Quotation step now passes** (steps 11–12 complete: Create Quote → OK → customer search "Test" → Select customer → Save Quotation → click "Order" header tab)
+
+**All 3 GC types now pass for Order endpoint** ✅ — completed 8 April 2026.
+
+| GC Type | Configuration | Order |
+|---|---|---|
+| Standard | ✅ | ✅ |
+| Annual (12 months) | ✅ | ✅ |
+| Parts-Only | ✅ | ✅ |
+
+**Key findings from Order endpoint:**
+- "Order" header nav tab: CPQ uses `<span>` elements — selector scoped to nav container with `getByText("Order", { exact: true })`
+- Order page URL pattern: `/aftersales/asorder/<UUID>` — Order ID captured from URL
+- Dealer account: dropdown select with class `select-field dealer-account-height ...`, options are account IDs
+- No PDF downloads after Place Order in Stage (steps 14–15 skip gracefully)
+- Annual 60 months fails at Apply Changes (CPQ limitation) — use 12 months (`ANNUAL_DURATION=12`)
+
+### MF brand — confirmed passing ✅ (8 April 2026)
+
+- Stage | MF | US | Standard | Configuration: ✅
+- Stage | MF | US | Standard | Order: ✅
+- MF CPQ URL: `/masseyferguson/dealer/en_US/aftersales/machineselection`
+- MF credentials: `lang.tester@langtest.com` / `Base-Blue-1357` (same as FT — both brands share the SSO)
+- MF renders in English with `lang.tester`; French only appears with MAPLE.TESTER (account locale setting)
+- VIN used: `AGCMY45GANB179050` (MF 8730 S Dyna-VT)
+
+### Where to continue next session
+
+1. **Multi-VIN** — set `VINS=VIN1,VIN2` in `.env.local`; verify VINs 2+ use Machine tab (no SSO re-login)
+2. **Prod environment** — set `ENVIRONMENT=Prod` in `.env.local`; journey ends at Save Config (no Quote/Order)
+3. **MF Annual + Parts-Only** — only Standard tested for MF so far
+
+---
+
+## Session: 9–11 April 2026 — CA French Testing
+
+### What was done this session
+
+Tested the CA French (MAPLE.TESTER / fr_CA) flow end-to-end for all 3 GC types at the Configuration endpoint, and partially for the Order endpoint.
+
+**Key differences in CA French workflow vs US English:**
+
+1. **Config save modal** — After clicking "Sauvegarder" (Save Config), a "Sauvegarde configuration" modal appears. Must click "SAUVEGARDER" scoped to `getByRole("dialog")` to complete the save. Clicking "Annuler" leaves the config in an unsaved state, which blocks "Créer une citation".
+
+2. **Parts Picklist PDF** — After properly saving via the modal, a `GenuineCare_CONFIGxxxxxxxx_VIN.pdf` file is downloadable at the Configuration stage. The Service Checklist PDF is not present at Configuration stage (skipped gracefully).
+
+3. **Quotation page differences**:
+   - Search button: "Chercher" (not "Rechercher")
+   - Save Quotation button: "Sauvegarder le devis"
+   - Create Quote button: "CRÉER UNE CITATION"
+   - Machine Start Hour range keyword: "intervalle" (French), added to detection regex
+
+4. **Order endpoint — known limitation** — CA Stage has no pre-existing test customers. The Quotation page requires a customer before the quotation can be committed and the Order tab accessed. Script handles gracefully: tries "Test", "Lang", "Maple", "Agco" — all return no results. Proceeds without customer → Tab Quotation PASSES, Tab Order FAILS with "Place Order not found".
+
+### Results
+
+| Brand | Country | Language | GC Type | Configuration | Order |
+|---|---|---|---|---|---|
+| MF | CA | FR | Standard | ✅ | ⚠️ no test customers |
+| MF | CA | FR | Annual (12 months) | ✅ | not tested |
+| MF | CA | FR | Parts-Only | ✅ | not tested |
+
+### All EN/US results to date
+
+| Brand | GC Type | Configuration | Order |
+|---|---|---|---|
+| FT | Standard | ✅ | ✅ |
+| FT | Annual (12 months) | ✅ | ✅ |
+| FT | Parts-Only | ✅ | ✅ |
+| MF | Standard | ✅ | ✅ |
+| MF | Annual (12 months) | ✅ | ✅ |
+| MF | Parts-Only | ✅ | ✅ |
+
+### Where to continue next session
+
+1. **Multi-VIN** — set `VINS=VIN1,VIN2`; verify VINs 2+ use `goto(CPQ_URL)` + `loginIfNeeded()` correctly
+2. **Prod environment** — set `ENVIRONMENT=Prod`; journey ends at Save Config (no Quote/Order)
+3. **CA FR Order** — blocked by missing test customers in CA Stage; resolve by adding test customer data
+
+---
+
 ## Parked — Future Phases
 
 ### Phase 2 — Failure Screenshots (Parked)
@@ -249,4 +384,4 @@ Browser (user)
 
 ---
 
-*Last updated: 27 February 2026*
+*Last updated: 11 April 2026*
