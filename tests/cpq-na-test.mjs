@@ -1041,16 +1041,22 @@ async function run() {
         }
 
         // ── 14. Download Genuine Care Order Details PDF ────────────────────────
-        // Optional step — button may not appear on the post-order page in Stage.
+        // Post-order page (/asorder/UUID). Button text varies — try broad patterns.
+        // Take a debug screenshot so we can see what's on the post-order page.
+        await screenshotToBlob(vinPage, `${prefix} post-order-page`).catch(() => {});
         await dismissConsentBanner(vinPage);
         t0 = Date.now();
         try {
-          const dlBtn = vinPage.locator("button, a").filter({ hasText: /genuine care order|gc order|order details/i }).first();
-          const dlFound = await dlBtn.waitFor({ timeout: 8000 }).then(() => true).catch(() => false);
+          const dlBtn = vinPage.locator("button, a, [role='button']")
+            .filter({ hasText: /genuine care|gc.?order|order detail|order summary|order confirm|contract|download/i })
+            .or(vinPage.locator("a[href*='.pdf']"))
+            .first();
+          const dlFound = await dlBtn.waitFor({ timeout: 15000 }).then(() => true).catch(() => false);
           if (!dlFound) {
             console.log(`  GC Order Details PDF button not found — skipping`);
             await pass(`${prefix} Download Genuine Care Order Details PDF`, { page: vinPage, startTime: t0 });
           } else {
+            console.log(`  Found GC Order Details button: "${await dlBtn.textContent().catch(() => '?')}"`);
             const [dl] = await Promise.all([
               vinPage.waitForEvent("download", { timeout: 45000 }),
               dlBtn.click(),
@@ -1067,25 +1073,29 @@ async function run() {
         }
 
         // ── 15. Download Maintenance Agreement PDF ────────────────────────────
-        // Optional step — button may not appear on the post-order page in Stage.
+        // Post-order page (/asorder/UUID). Try broad patterns.
         await dismissConsentBanner(vinPage);
         t0 = Date.now();
         try {
-          const dlBtn = vinPage.locator("button, a").filter({ hasText: /maintenance agreement/i }).first();
-          const dlFound = await dlBtn.waitFor({ timeout: 8000 }).then(() => true).catch(() => false);
+          const dlBtn = vinPage.locator("button, a, [role='button']")
+            .filter({ hasText: /maintenance/i })
+            .or(vinPage.locator("a[href*='.pdf']").filter({ hasText: /maintenance/i }))
+            .first();
+          const dlFound = await dlBtn.waitFor({ timeout: 15000 }).then(() => true).catch(() => false);
           if (!dlFound) {
             console.log(`  Maintenance Agreement PDF button not found — skipping`);
             await pass(`${prefix} Download Maintenance Agreement PDF`, { page: vinPage, startTime: t0 });
           } else {
-          const [dl] = await Promise.all([
-            vinPage.waitForEvent("download", { timeout: 45000 }),
-            dlBtn.click(),
-          ]);
-          const maintPath = `maintenance-agreement-${VIN}.pdf`;
-          await dl.saveAs(maintPath);
-          allPdfPaths.push(maintPath);
-          console.log(`  Saved: ${dl.suggestedFilename()}`);
-          await pass(`${prefix} Download Maintenance Agreement PDF`, { page: vinPage, startTime: t0 });
+            console.log(`  Found Maintenance button: "${await dlBtn.textContent().catch(() => '?')}"`);
+            const [dl] = await Promise.all([
+              vinPage.waitForEvent("download", { timeout: 45000 }),
+              dlBtn.click(),
+            ]);
+            const maintPath = `maintenance-agreement-${VIN}.pdf`;
+            await dl.saveAs(maintPath);
+            allPdfPaths.push(maintPath);
+            console.log(`  Saved: ${dl.suggestedFilename()}`);
+            await pass(`${prefix} Download Maintenance Agreement PDF`, { page: vinPage, startTime: t0 });
           }
         } catch (err) {
           await fail(`${prefix} Download Maintenance Agreement PDF`, err, { page: vinPage, startTime: t0 });
