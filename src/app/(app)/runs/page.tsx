@@ -247,11 +247,11 @@ export default function RunsPage() {
               <col style={{ width: 220 }} />
               <col style={{ width: 150 }} />
               <col style={{ width: 160 }} />
-              <col style={{ width: 95 }} />
-              <col style={{ width: 145 }} />
+              <col style={{ width: 90 }} />
+              <col style={{ width: 120 }} />
+              <col style={{ width: 90 }} />
               <col style={{ width: 70 }} />
               <col />
-              <col style={{ width: 60 }} />
             </colgroup>
             <thead>
               <tr style={{ background: C.surfaceHi, borderBottom: `1px solid ${C.border}` }}>
