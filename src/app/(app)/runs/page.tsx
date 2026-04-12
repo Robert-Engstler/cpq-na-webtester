@@ -265,6 +265,7 @@ export default function RunsPage() {
                 <th className={thClass} style={thStyle}>Status</th>
                 <th className={thClass} style={thStyle}>Started</th>
                 <th className={thClass} style={thStyle}>Duration</th>
+                <th className={thClass} style={thStyle}>Details</th>
                 <th className="px-4 py-3" />
               </tr>
             </thead>
@@ -376,6 +377,19 @@ export default function RunsPage() {
                     <Duration start={run.created_at} end={run.finished_at} live={run.status === "pending" && stoppingId !== run.id} />
                   </td>
 
+                  {/* Details */}
+                  <td className="px-4 py-3" style={tdTop}>
+                    {run.status !== "pending" ? (
+                      <a href={`/runs/${run.id}`} target="_blank" rel="noopener noreferrer"
+                        className="font-medium"
+                        style={{ color: C.accent, textDecoration: "underline", fontSize: 11 }}>
+                        Details
+                      </a>
+                    ) : (
+                      <span style={{ color: C.muted }}>—</span>
+                    )}
+                  </td>
+
                   {/* Actions */}
                   <td className="px-4 py-3" style={tdTop}>
                     <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -391,25 +405,6 @@ export default function RunsPage() {
                           }}>
                           {stoppingId === run.id ? "Stopping…" : "Stop"}
                         </button>
-                      )}
-                      {run.status !== "pending" && (
-                        <a href={`/runs/${run.id}`} target="_blank" rel="noopener noreferrer"
-                          className="font-medium"
-                          style={{ color: C.accent, textDecoration: "underline", fontSize: 11 }}>
-                          Details
-                        </a>
-                      )}
-                      {run.pdf_url && (
-                        <a href={run.pdf_url} target="_blank" rel="noopener noreferrer"
-                          className="inline-flex items-center px-2 py-1 text-xs font-medium"
-                          style={{
-                            background: "transparent", color: C.secondary,
-                            border: `1px solid ${C.border}`, borderLeft: `3px solid ${C.accent}`,
-                            borderRadius: 2, whiteSpace: "nowrap", textDecoration: "none",
-                          }}>
-                          <PdfIcon />
-                          PDFs
-                        </a>
                       )}
                     </div>
                   </td>
