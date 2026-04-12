@@ -983,6 +983,16 @@ async function run() {
             }
           }
 
+          // The Order tab may require saving the quotation before "Place Order" becomes available.
+          // EN: "Save" / "Save Quotation"  |  FR: "Sauvegarder" / "Enregistrer"
+          const saveQuotBtn = vinPage.getByRole("button", { name: /^save$|save quotation|sauvegarder|enregistrer/i });
+          const saveQuotFound = await saveQuotBtn.first().waitFor({ state: "visible", timeout: 8000 }).then(() => true).catch(() => false);
+          if (saveQuotFound) {
+            console.log(`  Saving quotation before placing order`);
+            await saveQuotBtn.first().click();
+            await vinPage.waitForTimeout(2000);
+          }
+
           // EN: "Place Order"  |  FR: "Placer la commande" / "Passer la commande"
           const placeOrderBtn = vinPage.getByRole("button", { name: /place order|placer la commande|passer la commande/i });
           const placeOrderFound = await placeOrderBtn.waitFor({ timeout: 20000 }).then(() => true).catch(() => false);
