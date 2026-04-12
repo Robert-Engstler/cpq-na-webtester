@@ -983,14 +983,17 @@ async function run() {
             }
           }
 
-          // The Order tab may require saving the quotation before "Place Order" becomes available.
+          // The Order screen first shows the quotation and requires saving before Place Order appears.
           // EN: "Save" / "Save Quotation"  |  FR: "Sauvegarder" / "Enregistrer"
           const saveQuotBtn = vinPage.getByRole("button", { name: /^save$|save quotation|sauvegarder|enregistrer/i });
-          const saveQuotFound = await saveQuotBtn.first().waitFor({ state: "visible", timeout: 8000 }).then(() => true).catch(() => false);
+          const saveQuotFound = await saveQuotBtn.first().waitFor({ state: "visible", timeout: 25000 }).then(() => true).catch(() => false);
           if (saveQuotFound) {
-            console.log(`  Saving quotation before placing order`);
+            console.log(`  Saving quotation on Order screen`);
+            await vinPage.locator(".page-unload-div.show, .page-unload-div").waitFor({ state: "hidden", timeout: 15000 }).catch(() => {});
             await saveQuotBtn.first().click();
-            await vinPage.waitForTimeout(2000);
+            await vinPage.waitForTimeout(3000);
+          } else {
+            console.log(`  No save button found on Order screen — proceeding`);
           }
 
           // EN: "Place Order"  |  FR: "Placer la commande" / "Passer la commande"
