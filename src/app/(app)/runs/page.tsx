@@ -143,9 +143,12 @@ function vinColor(vin: string, status: Run["status"], steps: StepResult[] | null
 
 function getConfig(vin: string, steps: StepResult[] | null): { id: string; url?: string } | null {
   if (!steps) return null;
-  for (const s of steps.filter((s) => matchVinFromStep(s.step, [vin]) === vin)) {
-    if (s.configId) return { id: s.configId, url: s.configUrl };
-  }
+  const vinSteps = steps.filter((s) => matchVinFromStep(s.step, [vin]) === vin);
+  // Prefer last step with a CONFIG... id (extracted from PDF filename); fall back to first with any configId
+  const last = [...vinSteps].reverse().find((s) => s.configId && /^CONFIG\d+$/i.test(s.configId));
+  if (last) return { id: last.configId!, url: last.configUrl };
+  const first = vinSteps.find((s) => s.configId);
+  if (first) return { id: first.configId!, url: first.configUrl };
   return null;
 }
 

@@ -152,7 +152,7 @@ async function uploadToBlob(filePath, filename) {
     headers: {
       Authorization: `Bearer ${token}`,
       "x-api-version": "7",
-      "x-content-type": "application/zip",
+      "Content-Type": "application/zip",
     },
     body,
   });
@@ -745,8 +745,12 @@ async function run() {
             const partsPath = `parts-picklist-${VIN}.pdf`;
             await dl.saveAs(partsPath);
             allPdfPaths.push(partsPath);
-            console.log(`  Saved: ${dl.suggestedFilename()}`);
-            await pass(`${prefix} Download Parts Picklist PDF`, { page: vinPage, startTime: t0 });
+            const pdfFilename = dl.suggestedFilename();
+            console.log(`  Saved: ${pdfFilename}`);
+            // Extract CONFIG... number from filename (e.g. GenuineCare_CONFIG02134811_VIN.pdf)
+            const configNumMatch = pdfFilename.match(/CONFIG\d+/i);
+            if (configNumMatch) { configId = configNumMatch[0].toUpperCase(); }
+            await pass(`${prefix} Download Parts Picklist PDF`, { page: vinPage, startTime: t0, configId, configUrl });
           }
         } catch (err) {
           await fail(`${prefix} Download Parts Picklist PDF`, err, { page: vinPage, startTime: t0 });
