@@ -251,6 +251,7 @@ export default function RunsPage() {
               <col style={{ width: 145 }} />
               <col style={{ width: 70 }} />
               <col />
+              <col style={{ width: 60 }} />
             </colgroup>
             <thead>
               <tr style={{ background: C.surfaceHi, borderBottom: `1px solid ${C.border}` }}>
@@ -260,6 +261,7 @@ export default function RunsPage() {
                 <th className={thClass} style={thStyle}>VINs / Genuine Care</th>
                 <th className={thClass} style={thStyle}>Config ID</th>
                 <th className={thClass} style={thStyle}>Order ID</th>
+                <th className={thClass} style={thStyle}>PDFs</th>
                 <th className={thClass} style={thStyle}>Status</th>
                 <th className={thClass} style={thStyle}>Started</th>
                 <th className={thClass} style={thStyle}>Duration</th>
@@ -345,6 +347,18 @@ export default function RunsPage() {
                         );
                       })}
                     </div>
+                  </td>
+
+                  {/* PDFs */}
+                  <td className="px-4 py-3" style={tdTop}>
+                    {run.pdf_url ? (
+                      <a href={run.pdf_url} target="_blank" rel="noopener noreferrer"
+                        style={{ color: C.accent, textDecoration: "underline", fontFamily: mono, fontSize: 11 }}>
+                        ⬇ ZIP
+                      </a>
+                    ) : (
+                      <span style={{ color: C.muted }}>—</span>
+                    )}
                   </td>
 
                   {/* Status */}
