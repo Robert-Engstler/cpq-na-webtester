@@ -1001,32 +1001,42 @@ async function run() {
           const placeOrderFound = await placeOrderBtn.waitFor({ timeout: 20000 }).then(() => true).catch(() => false);
           if (!placeOrderFound) throw new Error("Place Order button not found after 20s");
           await placeOrderBtn.click();
-          // SPA: do NOT use waitForLoadState("networkidle") — wait for page to settle instead
-          // Poll until queue clears (CPQ may queue the order for async processing)
+
+          // After clicking, CPQ may queue the order — detect and re-click up to 3 times.
+          // Order ID appears in a bottom-right toast: "with the reference of 9901257067"
           let postOrderText = "";
-          for (let attempt = 1; attempt <= 5; attempt++) {
-            await vinPage.waitForTimeout(attempt === 1 ? 4000 : 30000);
-            postOrderText = await vinPage.locator("body").textContent({ timeout: 3000 }).catch(() => "");
-            if (/queue|waiting/i.test(postOrderText)) {
-              console.log(`  Order queued — retrying in 30s (attempt ${attempt}/5)`);
-              if (attempt === 5) throw new Error("Order stuck in queue after 5 retries (150s)");
-            } else {
-              if (attempt > 1) console.log(`  Queue cleared after attempt ${attempt}`);
+          for (let attempt = 1; attempt <= 3; attempt++) {
+            await vinPage.waitForTimeout(attempt === 1 ? 5000 : 30000);
+            postOrderText = await vinPage.locator("body").textContent({ timeout: 5000 }).catch(() => "");
+
+            // Success: order ID found in toast ("reference of 9901257067")
+            if (/reference\s+of\s+\d|99\d{5}/i.test(postOrderText)) {
+              if (attempt > 1) console.log(`  Order placed after ${attempt} attempt(s)`);
               break;
             }
+
+            // Queue: re-click Place Order and try again
+            if (/queue|waiting/i.test(postOrderText)) {
+              if (attempt === 3) throw new Error("Order stuck in queue after 3 retries");
+              console.log(`  Order queued — re-clicking Place Order (attempt ${attempt}/3)`);
+              const btnVisible = await placeOrderBtn.waitFor({ state: "visible", timeout: 5000 }).then(() => true).catch(() => false);
+              if (btnVisible) await placeOrderBtn.click();
+            } else {
+              // No queue, no toast yet — may still be processing
+              if (attempt === 3) console.log(`  Post-order page text: ${postOrderText.slice(0, 300)}`);
+            }
           }
-          // Try multiple patterns: "Order Number: XYZ", numeric 99-prefixed IDs, letter-prefixed IDs
-          const orderNumMatch = postOrderText.match(/order\s*(number|id|#|no\.?|ref\.?)[:\s#]*([A-Z0-9\-]{4,})/i)
-            ?? postOrderText.match(/\b(99\d{5,})\b/)   // CPQ order IDs starting with 99
+
+          // Extract order ID: "reference of 9901257067", "99XXXXXXX", or letter-prefixed "FO123456"
+          const orderNumMatch = postOrderText.match(/reference\s+of\s+(\d{4,})/i)
+            ?? postOrderText.match(/\b(99\d{5,})\b/)
+            ?? postOrderText.match(/order\s*(?:number|id|#|no\.?|ref\.?)[:\s#]*([A-Z0-9\-]{4,})/i)
             ?? postOrderText.match(/([A-Z]{2,}\d{6,})/);
           if (orderNumMatch) {
-            orderId = orderNumMatch[2] ?? orderNumMatch[1];
+            orderId = orderNumMatch[1] ?? orderNumMatch[2];
             console.log(`  Order ID captured: ${orderId}`);
           } else {
-            // Fallback: URL — skip UUID segments (too generic), look for order-specific paths
-            const urlMatch = vinPage.url().match(/(?:asorder|order)[\/=]([A-Z0-9]{4,})/i);
-            orderId = urlMatch?.[1] ?? null;
-            console.log(orderId ? `  Order ID from URL: ${orderId}` : `  Order ID not found — page text: ${postOrderText.slice(0, 300)}`);
+            console.log(`  Order ID not found in page text`);
           }
 
           if (orderId) {
