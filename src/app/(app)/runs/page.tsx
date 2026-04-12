@@ -320,14 +320,18 @@ export default function RunsPage() {
                       {run.vins.map((v) => {
                         const cfg = getConfig(v, run.result_json);
                         if (!cfg) return <span key={v} style={{ color: C.muted }}>—</span>;
-                        const configHref = cfg.url
+                        // Only CONFIG... IDs are retrievable links; UUIDs are ephemeral session IDs
+                        const isConfigId = /^CONFIG\d+$/i.test(cfg.id);
+                        const configHref = isConfigId && cfg.url
                           ? (cfg.url.includes("?") ? cfg.url : `${cfg.url}?isRetrieved=true`)
-                          : "#";
-                        return (
+                          : null;
+                        return configHref ? (
                           <a key={v} href={configHref} target="_blank" rel="noopener noreferrer"
                             style={{ color: C.accent, textDecoration: "underline", fontFamily: mono, fontSize: 11 }}>
                             {cfg.id}
                           </a>
+                        ) : (
+                          <span key={v} style={{ color: C.fg, fontFamily: mono, fontSize: 11 }}>{cfg.id}</span>
                         );
                       })}
                     </div>
@@ -356,7 +360,7 @@ export default function RunsPage() {
                     {run.pdf_url ? (
                       <a href={run.pdf_url} target="_blank" rel="noopener noreferrer"
                         style={{ color: C.accent, textDecoration: "underline", fontFamily: mono, fontSize: 11 }}>
-                        ⬇ ZIP
+                        ZIP
                       </a>
                     ) : (
                       <span style={{ color: C.muted }}>—</span>

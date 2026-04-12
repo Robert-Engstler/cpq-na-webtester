@@ -750,7 +750,11 @@ async function run() {
             console.log(`  Saved: ${pdfFilename}`);
             // Extract CONFIG... number from filename (e.g. GenuineCare_CONFIG02134811_VIN.pdf)
             const configNumMatch = pdfFilename.match(/CONFIG\d+/i);
-            if (configNumMatch) { configId = configNumMatch[0].toUpperCase(); }
+            if (configNumMatch) {
+              configId = configNumMatch[0].toUpperCase();
+              // Replace the UUID segment in configUrl with the CONFIG number so the link works
+              if (configUrl) configUrl = configUrl.replace(/\/configure\/[^?#/]+/, `/configure/${configId}`);
+            }
             await pass(`${prefix} Download Parts Picklist PDF`, { page: vinPage, startTime: t0, configId, configUrl });
           }
         } catch (err) {
