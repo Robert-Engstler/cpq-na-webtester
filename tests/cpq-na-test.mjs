@@ -764,15 +764,20 @@ async function run() {
         try {
           // EN: "Download" / "Service Checklist"  |  FR: "Télécharger" / "Liste de contrôle"
           // Button may not appear in CA French workflow — skip gracefully if not found.
+          // After step 9, the Parts Picklist "Download" button may be gone — count remaining
+          // buttons and pick last one (service checklist is always the second/last download).
           const dlBtns = vinPage.locator("button, a[download], a[href*='.pdf']").filter({ hasText: /download|service.?checklist|t\u00e9l\u00e9charger|liste.?de.?contr|checklist/i });
-          const dlFound = await dlBtns.waitFor({ timeout: 10000 }).then(() => true).catch(() => false);
+          const dlFound = await dlBtns.first().waitFor({ timeout: 10000 }).then(() => true).catch(() => false);
           if (!dlFound) {
             console.log(`  Service Checklist PDF button not found — skipping`);
             await pass(`${prefix} Download Service Checklist PDF`, { page: vinPage, startTime: t0 });
           } else {
+            const count = await dlBtns.count();
+            // If both picklist + checklist buttons still visible: use nth(1); otherwise nth(0).
+            const svcDlBtn = dlBtns.nth(count > 1 ? 1 : 0);
             const [dl] = await Promise.all([
               vinPage.waitForEvent("download", { timeout: 45000 }),
-              dlBtns.nth(1).click(),
+              svcDlBtn.click(),
             ]);
             const svcPath = `service-checklist-${VIN}.pdf`;
             await dl.saveAs(svcPath);

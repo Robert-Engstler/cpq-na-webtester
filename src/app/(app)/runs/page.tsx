@@ -319,13 +319,15 @@ export default function RunsPage() {
                     <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
                       {run.vins.map((v) => {
                         const cfg = getConfig(v, run.result_json);
-                        return cfg ? (
-                          <a key={v} href={cfg.url ?? "#"} target="_blank" rel="noopener noreferrer"
+                        if (!cfg) return <span key={v} style={{ color: C.muted }}>—</span>;
+                        const configHref = cfg.url
+                          ? (cfg.url.includes("?") ? cfg.url : `${cfg.url}?isRetrieved=true`)
+                          : "#";
+                        return (
+                          <a key={v} href={configHref} target="_blank" rel="noopener noreferrer"
                             style={{ color: C.accent, textDecoration: "underline", fontFamily: mono, fontSize: 11 }}>
                             {cfg.id}
                           </a>
-                        ) : (
-                          <span key={v} style={{ color: C.muted }}>—</span>
                         );
                       })}
                     </div>
