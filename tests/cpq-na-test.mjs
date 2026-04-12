@@ -153,6 +153,7 @@ async function uploadToBlob(filePath, filename) {
       Authorization: `Bearer ${token}`,
       "x-api-version": "7",
       "Content-Type": "application/zip",
+      "x-allow-public-access": "0",
     },
     body,
   });
