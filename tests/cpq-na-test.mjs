@@ -156,7 +156,7 @@ async function uploadToBlob(filePath, filename) {
     },
     body,
   });
-  if (!res.ok) { console.error(`Blob upload failed: ${res.status}`); return null; }
+  if (!res.ok) { const errBody = await res.text().catch(() => ""); console.error(`Blob upload failed: ${res.status} — ${errBody}`); return null; }
   const { url } = await res.json();
   console.log(`  Uploaded: ${url}`);
   return url;
