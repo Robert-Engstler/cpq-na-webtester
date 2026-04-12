@@ -183,13 +183,14 @@ function vinColor(vin: string, status: Run["status"], steps: StepResult[] | null
   return C.success;
 }
 
-/** Get config ID and URL for a VIN from its steps */
+/** Get config ID and URL for a VIN from its steps — prefer CONFIG\d+ format over UUID */
 function getConfig(vin: string, steps: StepResult[] | null, vins: string[]): { id: string; url?: string } | null {
   if (!steps) return null;
   const vinSteps = steps.filter((s) => matchVinFromStep(s.step, [vin]) === vin);
-  for (const s of vinSteps) {
-    if (s.configId) return { id: s.configId, url: s.configUrl };
-  }
+  const last = [...vinSteps].reverse().find((s) => s.configId && /^CONFIG\d+$/i.test(s.configId));
+  if (last) return { id: last.configId!, url: last.configUrl };
+  const first = vinSteps.find((s) => s.configId);
+  if (first) return { id: first.configId!, url: first.configUrl };
   return null;
 }
 
@@ -348,10 +349,15 @@ export default function RunDetailPage({
                 <div className="flex flex-col gap-0.5">
                   {run.vins.map((v) => {
                     const cfg = getConfig(v, run.result_json, run.vins);
-                    return cfg ? (
+                    if (!cfg) return <span key={v} style={{ color: C.muted }}>{"\u2014"}</span>;
+                    const isConfigId = /^CONFIG\d+$/i.test(cfg.id);
+                    const configHref = isConfigId && cfg.url
+                      ? (cfg.url.includes("?") ? cfg.url : `${cfg.url}?isRetrieved=true`)
+                      : null;
+                    return configHref ? (
                       <a
                         key={v}
-                        href={cfg.url ?? "#"}
+                        href={configHref}
                         target="_blank"
                         rel="noopener noreferrer"
                         style={{ color: C.accent, textDecoration: "underline" }}
@@ -359,7 +365,7 @@ export default function RunDetailPage({
                         {cfg.id}
                       </a>
                     ) : (
-                      <span key={v} style={{ color: C.muted }}>{"\u2014"}</span>
+                      <span key={v} style={{ color: C.secondary }}>{cfg.id}</span>
                     );
                   })}
                 </div>
