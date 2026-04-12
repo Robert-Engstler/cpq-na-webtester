@@ -266,7 +266,6 @@ export default function RunsPage() {
                 <th className={thClass} style={thStyle}>Started</th>
                 <th className={thClass} style={thStyle}>Duration</th>
                 <th className={thClass} style={thStyle}>Details</th>
-                <th className="px-4 py-3" />
               </tr>
             </thead>
             <tbody>
@@ -377,36 +376,27 @@ export default function RunsPage() {
                     <Duration start={run.created_at} end={run.finished_at} live={run.status === "pending" && stoppingId !== run.id} />
                   </td>
 
-                  {/* Details */}
+                  {/* Details / Stop */}
                   <td className="px-4 py-3" style={tdTop}>
-                    {run.status !== "pending" ? (
+                    {run.status === "pending" ? (
+                      <button
+                        onClick={() => handleStop(run.id)}
+                        disabled={stoppingId === run.id}
+                        style={{
+                          background: "none", color: C.warning, border: `1px solid ${C.warning}`,
+                          borderRadius: 2, padding: "3px 8px", fontSize: 11,
+                          fontFamily: mono, cursor: stoppingId === run.id ? "not-allowed" : "pointer",
+                          opacity: stoppingId === run.id ? 0.5 : 1, whiteSpace: "nowrap",
+                        }}>
+                        {stoppingId === run.id ? "Stopping…" : "Stop"}
+                      </button>
+                    ) : (
                       <a href={`/runs/${run.id}`} target="_blank" rel="noopener noreferrer"
                         className="font-medium"
                         style={{ color: C.accent, textDecoration: "underline", fontSize: 11 }}>
                         Details
                       </a>
-                    ) : (
-                      <span style={{ color: C.muted }}>—</span>
                     )}
-                  </td>
-
-                  {/* Actions */}
-                  <td className="px-4 py-3" style={tdTop}>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                      {run.status === "pending" && (
-                        <button
-                          onClick={() => handleStop(run.id)}
-                          disabled={stoppingId === run.id}
-                          style={{
-                            background: "none", color: C.warning, border: `1px solid ${C.warning}`,
-                            borderRadius: 2, padding: "3px 8px", fontSize: 11,
-                            fontFamily: mono, cursor: stoppingId === run.id ? "not-allowed" : "pointer",
-                            opacity: stoppingId === run.id ? 0.5 : 1, whiteSpace: "nowrap",
-                          }}>
-                          {stoppingId === run.id ? "Stopping…" : "Stop"}
-                        </button>
-                      )}
-                    </div>
                   </td>
                 </tr>
               ))}
