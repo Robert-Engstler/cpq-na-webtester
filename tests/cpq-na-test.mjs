@@ -786,8 +786,17 @@ async function run() {
             const svcPath = `service-checklist-${VIN}.pdf`;
             await dl.saveAs(svcPath);
             allPdfPaths.push(svcPath);
-            console.log(`  Saved: ${dl.suggestedFilename()}`);
-            await pass(`${prefix} Download Service Checklist PDF`, { page: vinPage, startTime: t0 });
+            const svcFilename = dl.suggestedFilename();
+            console.log(`  Saved: ${svcFilename}`);
+            // Extract CONFIG... number if not already found in step 9 (Annual/Standard have no parts picklist)
+            if (!configId || !/^CONFIG\d+$/i.test(configId)) {
+              const configNumMatch = svcFilename.match(/CONFIG\d+/i);
+              if (configNumMatch) {
+                configId = configNumMatch[0].toUpperCase();
+                if (configUrl) configUrl = configUrl.replace(/\/configure\/[^?#/]+/, `/configure/${configId}`);
+              }
+            }
+            await pass(`${prefix} Download Service Checklist PDF`, { page: vinPage, startTime: t0, configId, configUrl });
           }
         } catch (err) {
           await fail(`${prefix} Download Service Checklist PDF`, err, { page: vinPage, startTime: t0 });
