@@ -331,7 +331,7 @@ export default function RunsPage() {
                             {cfg.id}
                           </a>
                         ) : (
-                          <span key={v} style={{ color: C.fg, fontFamily: mono, fontSize: 11 }}>{cfg.id}</span>
+                          <span key={v} style={{ color: C.secondary, fontFamily: mono, fontSize: 11 }}>{cfg.id}</span>
                         );
                       })}
                     </div>
