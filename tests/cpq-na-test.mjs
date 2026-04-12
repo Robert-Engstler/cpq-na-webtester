@@ -1015,16 +1015,18 @@ async function run() {
               break;
             }
           }
-          const orderNumMatch = postOrderText.match(/order\s*(number|id|#|no\.?)[:\s]*([A-Z0-9\-]{4,})/i)
+          // Try multiple patterns: "Order Number: XYZ", numeric 99-prefixed IDs, letter-prefixed IDs
+          const orderNumMatch = postOrderText.match(/order\s*(number|id|#|no\.?|ref\.?)[:\s#]*([A-Z0-9\-]{4,})/i)
+            ?? postOrderText.match(/\b(99\d{5,})\b/)   // CPQ order IDs starting with 99
             ?? postOrderText.match(/([A-Z]{2,}\d{6,})/);
           if (orderNumMatch) {
             orderId = orderNumMatch[2] ?? orderNumMatch[1];
             console.log(`  Order ID captured: ${orderId}`);
           } else {
-            // Fallback: URL
-            const urlMatch = vinPage.url().match(/order[/=]([A-Z0-9\-]{6,})/i);
+            // Fallback: URL — skip UUID segments (too generic), look for order-specific paths
+            const urlMatch = vinPage.url().match(/(?:asorder|order)[\/=]([A-Z0-9]{4,})/i);
             orderId = urlMatch?.[1] ?? null;
-            console.log(`  Order ID from URL: ${orderId}`);
+            console.log(orderId ? `  Order ID from URL: ${orderId}` : `  Order ID not found — page text: ${postOrderText.slice(0, 300)}`);
           }
 
           if (orderId) {
