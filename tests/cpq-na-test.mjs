@@ -914,15 +914,35 @@ async function run() {
           }
 
           // EN: "Save Quotation"  |  FR: "Sauvegarder le devis" / "Enregistrer le devis"
-          // Clicking Save Quotation navigates directly to /asorder/ — no need to click Order nav tab.
+          // Saves the quotation in-place (new UUID) — does NOT navigate by itself.
           const saveQuotationBtn = vinPage.getByRole("button", { name: /save.?quotation|save quote|sauvegarder le devis|enregistrer le devis/i }).first();
           await saveQuotationBtn.waitFor({ timeout: 10000 });
-          // Wait for any page-loading overlay to clear before clicking
           await vinPage.locator(".page-unload-div.show, .page-unload-div").waitFor({ state: "hidden", timeout: 15000 }).catch(() => {});
           await vinPage.waitForTimeout(500);
           await saveQuotationBtn.click();
+          await vinPage.waitForTimeout(2000);
 
-          // Wait for navigation to /asorder/ — this is the Order screen
+          // Click "Order" nav tab to navigate to /asorder/ — EN: "Order"  |  FR: "Commande"
+          const stepNavOrder = vinPage.locator(
+            "nav, header, [class*='step'], [class*='workflow'], [class*='breadcrumb']"
+          ).filter({ hasText: /machine|matériel/i })
+            .getByText("Order", { exact: true })
+            .or(vinPage.locator("nav, header, [class*='step'], [class*='workflow'], [class*='breadcrumb']")
+              .filter({ hasText: /machine|matériel/i })
+              .getByText("Commande", { exact: true }))
+            .first();
+
+          const stepNavFound = await stepNavOrder.waitFor({ state: "visible", timeout: 5000 }).then(() => true).catch(() => false);
+          if (stepNavFound) {
+            await stepNavOrder.click();
+          } else {
+            const allOrderEls = vinPage.getByText("Order", { exact: true })
+              .or(vinPage.getByText("Commande", { exact: true }));
+            const count = await allOrderEls.count();
+            if (count > 0) await allOrderEls.nth(count - 1).click();
+          }
+
+          // Wait for /asorder/ URL to confirm navigation to Order screen
           await vinPage.waitForURL(/\/asorder\//, { timeout: 30000 });
           console.log(`  Navigated to Order screen: ${vinPage.url()}`);
 
