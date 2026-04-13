@@ -894,22 +894,9 @@ async function run() {
             console.log(`  No customers found — proceeding without customer selection`);
           }
 
-          // EN: "Save Quotation"  |  FR: "Sauvegarder le devis" / "Enregistrer le devis"
-          const saveQuotationBtn = vinPage.getByRole("button", { name: /save.?quotation|save quote|sauvegarder le devis|enregistrer le devis/i }).first();
-          await saveQuotationBtn.waitFor({ timeout: 10000 });
-          // Wait for any page-loading overlay to clear before clicking
-          await vinPage.locator(".page-unload-div.show, .page-unload-div").waitFor({ state: "hidden", timeout: 15000 }).catch(() => {});
-          await vinPage.waitForTimeout(500);
-          await saveQuotationBtn.click();
-          await vinPage.waitForTimeout(2000);
-
-          // Click "Order" in header — scoped to the step nav container (the one containing "Machine" etc.)
-          // CPQ nav uses <span> elements, not <a>/<button> — must use getByText not role-based selectors.
-
           // CA French: quotation has mandatory sub-tabs that must be visited in order before
-          // "Commande" becomes accessible. Validation: "Veuillez naviguer par onglet."
-          // Sub-tabs: client → éléments supplémentaires → conditions générales → courrier → récapitulatif
-          // CA French: must visit all quotation sub-tabs in sequence before "Commande" is accessible.
+          // "Sauvegarder le devis" / "Save Quotation" becomes clickable.
+          // Sub-tabs: éléments supplémentaires → conditions générales → courrier → récapitulatif
           // "Récapitulatif" appears in BOTH main nav AND sub-tabs — use last() to hit the sub-tab.
           const quotationSubTabs = [
             { pattern: /[eé]l[eé]ments\s+suppl[eé]mentaires/i, nth: "first" },
@@ -926,29 +913,18 @@ async function run() {
             await vinPage.waitForTimeout(1000);
           }
 
-          // Click "Order" nav tab — EN: "Order"  |  FR: "Commande"
-          // Nav container contains "Machine" (EN) or "Matériel" (FR) as a reliable anchor.
-          const stepNavOrder = vinPage.locator(
-            "nav, header, [class*='step'], [class*='workflow'], [class*='breadcrumb']"
-          ).filter({ hasText: /machine|matériel/i })
-            .getByText("Order", { exact: true })
-            .or(vinPage.locator("nav, header, [class*='step'], [class*='workflow'], [class*='breadcrumb']")
-              .filter({ hasText: /machine|matériel/i })
-              .getByText("Commande", { exact: true }))
-            .first();
+          // EN: "Save Quotation"  |  FR: "Sauvegarder le devis" / "Enregistrer le devis"
+          // Clicking Save Quotation navigates directly to /asorder/ — no need to click Order nav tab.
+          const saveQuotationBtn = vinPage.getByRole("button", { name: /save.?quotation|save quote|sauvegarder le devis|enregistrer le devis/i }).first();
+          await saveQuotationBtn.waitFor({ timeout: 10000 });
+          // Wait for any page-loading overlay to clear before clicking
+          await vinPage.locator(".page-unload-div.show, .page-unload-div").waitFor({ state: "hidden", timeout: 15000 }).catch(() => {});
+          await vinPage.waitForTimeout(500);
+          await saveQuotationBtn.click();
 
-          const stepNavFound = await stepNavOrder.count() > 0;
-          if (stepNavFound) {
-            await stepNavOrder.click();
-          } else {
-            // Fallback: last element with text "Order" or "Commande"
-            const allOrderEls = vinPage.getByText("Order", { exact: true })
-              .or(vinPage.getByText("Commande", { exact: true }));
-            const count = await allOrderEls.count();
-            await allOrderEls.nth(count - 1).click();
-          }
-
-          await vinPage.waitForTimeout(5000);
+          // Wait for navigation to /asorder/ — this is the Order screen
+          await vinPage.waitForURL(/\/asorder\//, { timeout: 30000 });
+          console.log(`  Navigated to Order screen: ${vinPage.url()}`);
 
           await pass(`${prefix} Tab Quotation (search customer, save, → Order)`, { page: vinPage, startTime: t0 });
         } catch (err) {
@@ -981,19 +957,6 @@ async function run() {
                 break;
               }
             }
-          }
-
-          // The Order screen first shows the quotation and requires saving before Place Order appears.
-          // EN: "Save" / "Save Quotation"  |  FR: "Sauvegarder" / "Enregistrer"
-          const saveQuotBtn = vinPage.getByRole("button", { name: /^save$|save quotation|sauvegarder|enregistrer/i });
-          const saveQuotFound = await saveQuotBtn.first().waitFor({ state: "visible", timeout: 25000 }).then(() => true).catch(() => false);
-          if (saveQuotFound) {
-            console.log(`  Saving quotation on Order screen`);
-            await vinPage.locator(".page-unload-div.show, .page-unload-div").waitFor({ state: "hidden", timeout: 15000 }).catch(() => {});
-            await saveQuotBtn.first().click();
-            await vinPage.waitForTimeout(3000);
-          } else {
-            console.log(`  No save button found on Order screen — proceeding`);
           }
 
           // EN: "Place Order"  |  FR: "Placer la commande" / "Passer la commande"
@@ -1054,8 +1017,11 @@ async function run() {
 
         // ── 14. Download Genuine Care Order Details PDF ────────────────────────
         // Post-order page (/asorder/UUID). Button text varies — try broad patterns.
-        // Take a debug screenshot so we can see what's on the post-order page.
-        await screenshotToBlob(vinPage, `${prefix} post-order-page`).catch(() => {});
+        // Take a debug screenshot and log page text so we can identify the correct selectors.
+        const debugScreenshotUrl = await screenshotToBlob(vinPage, `${prefix} post-order-page`).catch(() => null);
+        if (debugScreenshotUrl) console.log(`  Post-order screenshot: ${debugScreenshotUrl}`);
+        const postOrderPageText = await vinPage.locator("body").textContent({ timeout: 5000 }).catch(() => "");
+        console.log(`  Post-order page text (500 chars): ${postOrderPageText.slice(0, 500)}`);
         await dismissConsentBanner(vinPage);
         t0 = Date.now();
         try {
