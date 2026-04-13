@@ -990,41 +990,51 @@ async function run() {
           if (!placeOrderFound) throw new Error("Place Order button not found after 20s");
           await placeOrderBtn.click();
 
-          // After clicking, CPQ may queue the order — detect and re-click up to 3 times.
-          // Order ID appears in a bottom-right toast: "with the reference of 9901257067"
+          // After clicking Place Order, CPQ may queue the order — detect and re-click up to 3 times.
+          // Success: Place Order button disappears and order ID toast appears.
+          // EN toast: "with the reference of 9901257067"
+          // FR toast: "avec la référence 9901257067" (or similar)
           let postOrderText = "";
           for (let attempt = 1; attempt <= 3; attempt++) {
             await vinPage.waitForTimeout(attempt === 1 ? 5000 : 30000);
             postOrderText = await vinPage.locator("body").textContent({ timeout: 5000 }).catch(() => "");
 
-            // Success: order ID found in toast ("reference of 9901257067")
-            if (/reference\s+of\s+\d|99\d{5}/i.test(postOrderText)) {
-              if (attempt > 1) console.log(`  Order placed after ${attempt} attempt(s)`);
+            // Success: order ID found in toast (EN or FR), or Place Order button gone
+            const orderPlaced = /reference\s+of\s+\d|r[eé]f[eé]rence\s+\d|99\d{5}/i.test(postOrderText);
+            const placeOrderGone = !(await placeOrderBtn.isVisible().catch(() => false));
+            if (orderPlaced || placeOrderGone) {
+              console.log(`  Order confirmed (attempt ${attempt}) — button gone: ${placeOrderGone}, ID in text: ${orderPlaced}`);
               break;
             }
 
             // Queue: re-click Place Order and try again
-            if (/queue|waiting/i.test(postOrderText)) {
+            if (/queue|en\s+attente|waiting/i.test(postOrderText)) {
               if (attempt === 3) throw new Error("Order stuck in queue after 3 retries");
               console.log(`  Order queued — re-clicking Place Order (attempt ${attempt}/3)`);
               const btnVisible = await placeOrderBtn.waitFor({ state: "visible", timeout: 5000 }).then(() => true).catch(() => false);
               if (btnVisible) await placeOrderBtn.click();
             } else {
-              // No queue, no toast yet — may still be processing
               if (attempt === 3) console.log(`  Post-order page text: ${postOrderText.slice(0, 300)}`);
             }
           }
 
-          // Extract order ID: "reference of 9901257067", "99XXXXXXX", or letter-prefixed "FO123456"
-          const orderNumMatch = postOrderText.match(/reference\s+of\s+(\d{4,})/i)
+          // Extract order ID — priority order:
+          // 1. URL: /asorder/9901357151 (numeric segment = order ID)
+          // 2. FR page: "ID de référence CPQ 9901357151"
+          // 3. EN toast: "with the reference of 9901357151"
+          // 4. Any 99XXXXXXX number
+          const urlOrderMatch = vinPage.url().match(/\/asorder\/(\d{4,})/);
+          const orderNumMatch = urlOrderMatch
+            ?? postOrderText.match(/r[eé]f[eé]rence\D{0,15}(\d{4,})/i)
+            ?? postOrderText.match(/reference\s+of\s+(\d{4,})/i)
+            ?? postOrderText.match(/N°\s*de\s*commande\D{0,10}(\d{4,})/i)
             ?? postOrderText.match(/\b(99\d{5,})\b/)
-            ?? postOrderText.match(/order\s*(?:number|id|#|no\.?|ref\.?)[:\s#]*([A-Z0-9\-]{4,})/i)
-            ?? postOrderText.match(/([A-Z]{2,}\d{6,})/);
+            ?? postOrderText.match(/order\s*(?:number|id|#|no\.?)[:\s#]*([A-Z0-9\-]{4,})/i);
           if (orderNumMatch) {
-            orderId = orderNumMatch[1] ?? orderNumMatch[2];
+            orderId = orderNumMatch[1];
             console.log(`  Order ID captured: ${orderId}`);
           } else {
-            console.log(`  Order ID not found in page text`);
+            console.log(`  Order ID not found in page text or URL`);
           }
 
           if (orderId) {
@@ -1041,33 +1051,38 @@ async function run() {
         }
 
         // ── 14. Download Genuine Care Order Details PDF ────────────────────────
-        // Post-order page (/asorder/UUID). Button text varies — try broad patterns.
-        // Take a debug screenshot and log page text so we can identify the correct selectors.
-        const debugScreenshotUrl = await screenshotToBlob(vinPage, `${prefix} post-order-page`).catch(() => null);
-        if (debugScreenshotUrl) console.log(`  Post-order screenshot: ${debugScreenshotUrl}`);
+        // Wait for Place Order button to disappear — confirms order is fully processed.
+        await vinPage.getByRole("button", { name: /place order|placer la commande|passer la commande/i })
+          .waitFor({ state: "hidden", timeout: 60000 }).catch(() => {});
+        await dismissConsentBanner(vinPage);
+        // Log page text for debugging PDF button selectors
         const postOrderPageText = await vinPage.locator("body").textContent({ timeout: 5000 }).catch(() => "");
         console.log(`  Post-order page text (500 chars): ${postOrderPageText.slice(0, 500)}`);
-        await dismissConsentBanner(vinPage);
         t0 = Date.now();
         try {
-          const dlBtn = vinPage.locator("button, a, [role='button']")
-            .filter({ hasText: /genuine care|gc.?order|order detail|order summary|order confirm|contract|download/i })
-            .or(vinPage.locator("a[href*='.pdf']"))
-            .first();
-          const dlFound = await dlBtn.waitFor({ timeout: 15000 }).then(() => true).catch(() => false);
+          // Post-order page shows two "Téléchargement" / "Download" buttons:
+          //   nth(0) = Genuine Care Order Details  ("Genuine Care Détails de la commande")
+          //   nth(1) = Maintenance Agreement        ("Accord de maintenance")
+          const allDlBtns = vinPage.getByRole("button", { name: /t[eé]l[eé]chargement|download/i });
+          const dlFound = await allDlBtns.first().waitFor({ timeout: 20000 }).then(() => true).catch(() => false);
           if (!dlFound) {
             console.log(`  GC Order Details PDF button not found — skipping`);
             await pass(`${prefix} Download Genuine Care Order Details PDF`, { page: vinPage, startTime: t0 });
           } else {
-            console.log(`  Found GC Order Details button: "${await dlBtn.textContent().catch(() => '?')}"`);
             const [dl] = await Promise.all([
               vinPage.waitForEvent("download", { timeout: 45000 }),
-              dlBtn.click(),
+              allDlBtns.nth(0).click(),
             ]);
             const gcOrderPath = `gc-order-details-${VIN}.pdf`;
             await dl.saveAs(gcOrderPath);
             allPdfPaths.push(gcOrderPath);
-            console.log(`  Saved: ${dl.suggestedFilename()}`);
+            const gcFilename = dl.suggestedFilename();
+            console.log(`  Saved: ${gcFilename}`);
+            // Extract order ID from PDF filename if not yet captured
+            if (!orderId) {
+              const idMatch = gcFilename.match(/\b(99\d{5,})\b/) ?? gcFilename.match(/(\d{7,})/);
+              if (idMatch) { orderId = idMatch[1]; orderIdsMap[VIN] = orderId; console.log(`  Order ID from PDF filename: ${orderId}`); }
+            }
             await pass(`${prefix} Download Genuine Care Order Details PDF`, { page: vinPage, startTime: t0 });
           }
         } catch (err) {
@@ -1076,23 +1091,19 @@ async function run() {
         }
 
         // ── 15. Download Maintenance Agreement PDF ────────────────────────────
-        // Post-order page (/asorder/UUID). Try broad patterns.
+        // Second "Téléchargement" / "Download" button on the post-order page
         await dismissConsentBanner(vinPage);
         t0 = Date.now();
         try {
-          const dlBtn = vinPage.locator("button, a, [role='button']")
-            .filter({ hasText: /maintenance/i })
-            .or(vinPage.locator("a[href*='.pdf']").filter({ hasText: /maintenance/i }))
-            .first();
-          const dlFound = await dlBtn.waitFor({ timeout: 15000 }).then(() => true).catch(() => false);
-          if (!dlFound) {
-            console.log(`  Maintenance Agreement PDF button not found — skipping`);
+          const allDlBtns = vinPage.getByRole("button", { name: /t[eé]l[eé]chargement|download/i });
+          const count = await allDlBtns.count();
+          if (count < 2) {
+            console.log(`  Maintenance Agreement PDF button not found (only ${count} download buttons) — skipping`);
             await pass(`${prefix} Download Maintenance Agreement PDF`, { page: vinPage, startTime: t0 });
           } else {
-            console.log(`  Found Maintenance button: "${await dlBtn.textContent().catch(() => '?')}"`);
             const [dl] = await Promise.all([
               vinPage.waitForEvent("download", { timeout: 45000 }),
-              dlBtn.click(),
+              allDlBtns.nth(1).click(),
             ]);
             const maintPath = `maintenance-agreement-${VIN}.pdf`;
             await dl.saveAs(maintPath);
