@@ -914,31 +914,36 @@ async function run() {
           }
 
           // EN: "Save Quotation"  |  FR: "Sauvegarder le devis" / "Enregistrer le devis"
-          // Saves the quotation in-place (new UUID) — does NOT navigate by itself.
+          // Saves the quotation in-place. After saving, the Order tab in the main nav becomes enabled.
           const saveQuotationBtn = vinPage.getByRole("button", { name: /save.?quotation|save quote|sauvegarder le devis|enregistrer le devis/i }).first();
           await saveQuotationBtn.waitFor({ timeout: 10000 });
           await vinPage.locator(".page-unload-div.show, .page-unload-div").waitFor({ state: "hidden", timeout: 15000 }).catch(() => {});
           await vinPage.waitForTimeout(500);
+          console.log(`  Clicking Save Quotation`);
           await saveQuotationBtn.click();
+          // Wait for the save to complete — overlay clears, then Order tab becomes clickable
+          await vinPage.locator(".page-unload-div.show, .page-unload-div").waitFor({ state: "hidden", timeout: 15000 }).catch(() => {});
           await vinPage.waitForTimeout(2000);
+          console.log(`  Save Quotation done, URL: ${vinPage.url()}`);
 
           // Click "Order" nav tab to navigate to /asorder/ — EN: "Order"  |  FR: "Commande"
+          // Scope to the main workflow nav (contains "Machine"/"Matériel") to avoid sub-tab matches.
           const stepNavOrder = vinPage.locator(
-            "nav, header, [class*='step'], [class*='workflow'], [class*='breadcrumb']"
-          ).filter({ hasText: /machine|matériel/i })
-            .getByText("Order", { exact: true })
-            .or(vinPage.locator("nav, header, [class*='step'], [class*='workflow'], [class*='breadcrumb']")
-              .filter({ hasText: /machine|matériel/i })
-              .getByText("Commande", { exact: true }))
+            "nav, header, [class*='step'], [class*='workflow'], [class*='breadcrumb'], [class*='nav']"
+          ).filter({ hasText: /machine|mat[eé]riel/i })
+            .getByText(/^Order$|^Commande$/i)
             .first();
 
-          const stepNavFound = await stepNavOrder.waitFor({ state: "visible", timeout: 5000 }).then(() => true).catch(() => false);
+          const stepNavFound = await stepNavOrder.waitFor({ state: "visible", timeout: 10000 }).then(() => true).catch(() => false);
+          console.log(`  Order nav tab found: ${stepNavFound}`);
           if (stepNavFound) {
             await stepNavOrder.click();
           } else {
-            const allOrderEls = vinPage.getByText("Order", { exact: true })
-              .or(vinPage.getByText("Commande", { exact: true }));
+            // Fallback: last element with text "Order" or "Commande" on page
+            const allOrderEls = vinPage.getByText(/^Order$/, { exact: true })
+              .or(vinPage.getByText(/^Commande$/, { exact: true }));
             const count = await allOrderEls.count();
+            console.log(`  Fallback Order elements found: ${count}`);
             if (count > 0) await allOrderEls.nth(count - 1).click();
           }
 
