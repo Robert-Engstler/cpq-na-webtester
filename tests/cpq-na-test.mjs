@@ -928,24 +928,18 @@ async function run() {
           await saveQuotationBtn.click();
           // Wait for the save to complete — overlay clears, then Order tab becomes clickable
           await vinPage.locator(".page-unload-div.show, .page-unload-div").waitFor({ state: "hidden", timeout: 15000 }).catch(() => {});
-          await vinPage.waitForTimeout(2000);
+          await vinPage.waitForTimeout(3000);
           console.log(`  Save Quotation done, URL: ${vinPage.url()}`);
 
-          // Click "Order" nav tab to navigate to /asorder/ — EN: "Order"  |  FR: "Commande"
-          // Use filter({ hasText }) for substring matching — avoids whitespace/anchor issues.
-          const orderTabEl = vinPage.locator("a, button, span, li")
-            .filter({ hasText: /^\s*(Order|Commande)\s*$/i })
-            .last();
-          const orderTabFound = await orderTabEl.waitFor({ state: "attached", timeout: 10000 }).then(() => true).catch(() => false);
-          console.log(`  Order tab found: ${orderTabFound}`);
-          if (orderTabFound) {
-            await orderTabEl.click();
-          } else {
-            console.log(`  Order tab not found — trying role-based selector`);
-            await vinPage.getByRole("link", { name: /^order$|^commande$/i })
-              .or(vinPage.getByRole("button", { name: /^order$|^commande$/i }))
-              .last().click().catch(() => {});
-          }
+          // Click "Order" nav tab — use JS evaluate to click the <a> ancestor directly,
+          // bypassing Angular router issues where clicking a child <span> doesn't trigger navigation.
+          const orderTabClicked = await vinPage.evaluate(() => {
+            const all = [...document.querySelectorAll("a, button")];
+            const el = all.reverse().find(e => /^\s*(Order|Commande)\s*$/i.test(e.textContent?.trim()));
+            if (el) { el.click(); return el.textContent?.trim(); }
+            return null;
+          });
+          console.log(`  Order tab clicked via JS: ${orderTabClicked ?? "not found"}`);
 
           // Wait for /asorder/ URL to confirm navigation to Order screen
           await vinPage.waitForURL(/\/asorder\//, { timeout: 30000 });
