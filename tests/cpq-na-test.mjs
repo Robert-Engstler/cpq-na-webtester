@@ -860,6 +860,9 @@ async function run() {
           }
           await vinPage.waitForTimeout(1000);
 
+          // Wait for page-unload-div overlay to clear before interacting with the quotation form
+          await vinPage.locator(".page-unload-div.show, .page-unload-div").waitFor({ state: "hidden", timeout: 30000 }).catch(() => {});
+
           // Search for customer by last name "Test"
           // Field has id="lastName" with no placeholder or name attribute
           // CA Stage may not have "Test" customers — try multiple terms, proceed without if none found
@@ -875,6 +878,8 @@ async function run() {
             .first();
           for (const term of searchTerms) {
             await searchField.fill(term);
+            // Wait for overlay to clear before each search click
+            await vinPage.locator(".page-unload-div.show, .page-unload-div").waitFor({ state: "hidden", timeout: 10000 }).catch(() => {});
             const searchEnabled = await searchBtn.isEnabled().catch(() => false);
             if (!searchEnabled) continue;
             await searchBtn.click();
