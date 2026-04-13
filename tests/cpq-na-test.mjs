@@ -985,33 +985,28 @@ async function run() {
           if (!placeOrderFound) throw new Error("Place Order button not found after 20s");
           await placeOrderBtn.click();
 
-          // After clicking Place Order, CPQ may queue the order — detect and re-click up to 3 times.
-          // Success: Place Order button disappears and order ID toast appears.
-          // EN toast: "with the reference of 9901257067"
-          // FR toast: "avec la référence 9901257067" (or similar)
+          // After clicking Place Order, CPQ may queue the order.
+          // Success indicator: URL changes from /asorder/UUID to /asorder/NUMERIC (e.g. /asorder/9901357151).
+          // Re-click Place Order up to 3 times if the URL hasn't changed after 30s.
           let postOrderText = "";
           for (let attempt = 1; attempt <= 3; attempt++) {
-            await vinPage.waitForTimeout(attempt === 1 ? 5000 : 30000);
-            postOrderText = await vinPage.locator("body").textContent({ timeout: 5000 }).catch(() => "");
-
-            // Success: order ID found in toast (EN or FR), or Place Order button gone
-            const orderPlaced = /reference\s+of\s+\d|r[eé]f[eé]rence\s+\d|99\d{5}/i.test(postOrderText);
-            const placeOrderGone = !(await placeOrderBtn.isVisible().catch(() => false));
-            if (orderPlaced || placeOrderGone) {
-              console.log(`  Order confirmed (attempt ${attempt}) — button gone: ${placeOrderGone}, ID in text: ${orderPlaced}`);
+            // Wait for URL to change to numeric order ID — this is the definitive success signal
+            const urlChanged = await vinPage.waitForURL(/\/asorder\/\d{4,}/, { timeout: 30000 })
+              .then(() => true).catch(() => false);
+            if (urlChanged) {
+              console.log(`  Order placed — URL: ${vinPage.url()}`);
               break;
             }
-
-            // Queue: re-click Place Order and try again
-            if (/queue|en\s+attente|waiting/i.test(postOrderText)) {
-              if (attempt === 3) throw new Error("Order stuck in queue after 3 retries");
-              console.log(`  Order queued — re-clicking Place Order (attempt ${attempt}/3)`);
+            // URL still has UUID — order is queued or processing. Re-click Place Order.
+            if (attempt < 3) {
+              console.log(`  Order not confirmed after 30s (attempt ${attempt}/3) — re-clicking Place Order`);
               const btnVisible = await placeOrderBtn.waitFor({ state: "visible", timeout: 5000 }).then(() => true).catch(() => false);
               if (btnVisible) await placeOrderBtn.click();
             } else {
-              if (attempt === 3) console.log(`  Post-order page text: ${postOrderText.slice(0, 300)}`);
+              console.log(`  Order not confirmed after 3 attempts`);
             }
           }
+          postOrderText = await vinPage.locator("body").textContent({ timeout: 5000 }).catch(() => "");
 
           // Extract order ID — priority order:
           // 1. URL: /asorder/9901357151 (numeric segment = order ID)
