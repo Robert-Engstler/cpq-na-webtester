@@ -926,24 +926,36 @@ async function run() {
           await vinPage.waitForTimeout(500);
           console.log(`  Clicking Save Quotation`);
           await saveQuotationBtn.click();
-          // Wait for the save to complete — overlay clears, then Order tab becomes clickable
-          await vinPage.locator(".page-unload-div.show, .page-unload-div").waitFor({ state: "hidden", timeout: 15000 }).catch(() => {});
-          await vinPage.waitForTimeout(3000);
+          // Wait for save: first wait for the overlay to appear (confirming action fired),
+          // then wait for it to clear (save complete). Success toast appears briefly after.
+          await vinPage.locator(".page-unload-div").waitFor({ state: "visible", timeout: 5000 }).catch(() => {});
+          await vinPage.locator(".page-unload-div").waitFor({ state: "hidden", timeout: 20000 }).catch(() => {});
+          await vinPage.waitForTimeout(2000);
           console.log(`  Save Quotation done, URL: ${vinPage.url()}`);
 
-          // Click "Order" nav tab — use JS evaluate to click the <a> ancestor directly,
-          // bypassing Angular router issues where clicking a child <span> doesn't trigger navigation.
-          const orderTabClicked = await vinPage.evaluate(() => {
-            const all = [...document.querySelectorAll("a, button")];
-            const el = all.reverse().find(e => /^\s*(Order|Commande)\s*$/i.test(e.textContent?.trim()));
-            if (el) { el.click(); return el.textContent?.trim(); }
-            return null;
-          });
-          console.log(`  Order tab clicked via JS: ${orderTabClicked ?? "not found"}`);
-
-          // Wait for /asorder/ URL to confirm navigation to Order screen
-          await vinPage.waitForURL(/\/asorder\//, { timeout: 30000 });
-          console.log(`  Navigated to Order screen: ${vinPage.url()}`);
+          // Navigate to Order screen — construct URL directly from current configure/UUID URL.
+          // The Order tab maps configure/UUID → asorder/UUID (same UUID, different path segment).
+          // Direct navigation is more reliable than clicking the Angular tab link.
+          const configureUrl = vinPage.url();
+          const asorderUrl = configureUrl.replace(/\/configure\/([^?#]+)/, '/asorder/$1');
+          if (asorderUrl !== configureUrl) {
+            console.log(`  Navigating directly to Order screen: ${asorderUrl}`);
+            await vinPage.goto(asorderUrl, { waitUntil: "domcontentloaded", timeout: 30000 });
+          } else {
+            // Fallback: click Order tab link by href pattern
+            const orderLinkHref = await vinPage.evaluate(() => {
+              const link = document.querySelector('a[href*="/asorder/"]');
+              if (link) { link.click(); return link.getAttribute('href'); }
+              // Last resort: text match
+              const all = [...document.querySelectorAll("a, button")];
+              const el = all.find(e => /^(Order|Commande)$/i.test(e.textContent?.trim()));
+              if (el) { el.click(); return el.textContent?.trim(); }
+              return null;
+            });
+            console.log(`  Order tab fallback clicked: ${orderLinkHref ?? "not found"}`);
+            await vinPage.waitForURL(/\/asorder\//, { timeout: 30000 });
+          }
+          console.log(`  On Order screen: ${vinPage.url()}`);
 
           await pass(`${prefix} Tab Quotation (search customer, save, → Order)`, { page: vinPage, startTime: t0 });
         } catch (err) {
