@@ -927,24 +927,19 @@ async function run() {
           console.log(`  Save Quotation done, URL: ${vinPage.url()}`);
 
           // Click "Order" nav tab to navigate to /asorder/ — EN: "Order"  |  FR: "Commande"
-          // Scope to the main workflow nav (contains "Machine"/"Matériel") to avoid sub-tab matches.
-          const stepNavOrder = vinPage.locator(
-            "nav, header, [class*='step'], [class*='workflow'], [class*='breadcrumb'], [class*='nav']"
-          ).filter({ hasText: /machine|mat[eé]riel/i })
-            .getByText(/^Order$|^Commande$/i)
-            .first();
-
-          const stepNavFound = await stepNavOrder.waitFor({ state: "visible", timeout: 10000 }).then(() => true).catch(() => false);
-          console.log(`  Order nav tab found: ${stepNavFound}`);
-          if (stepNavFound) {
-            await stepNavOrder.click();
+          // Use filter({ hasText }) for substring matching — avoids whitespace/anchor issues.
+          const orderTabEl = vinPage.locator("a, button, span, li")
+            .filter({ hasText: /^\s*(Order|Commande)\s*$/i })
+            .last();
+          const orderTabFound = await orderTabEl.waitFor({ state: "attached", timeout: 10000 }).then(() => true).catch(() => false);
+          console.log(`  Order tab found: ${orderTabFound}`);
+          if (orderTabFound) {
+            await orderTabEl.click();
           } else {
-            // Fallback: last element with text "Order" or "Commande" on page
-            const allOrderEls = vinPage.getByText(/^Order$/, { exact: true })
-              .or(vinPage.getByText(/^Commande$/, { exact: true }));
-            const count = await allOrderEls.count();
-            console.log(`  Fallback Order elements found: ${count}`);
-            if (count > 0) await allOrderEls.nth(count - 1).click();
+            console.log(`  Order tab not found — trying role-based selector`);
+            await vinPage.getByRole("link", { name: /^order$|^commande$/i })
+              .or(vinPage.getByRole("button", { name: /^order$|^commande$/i }))
+              .last().click().catch(() => {});
           }
 
           // Wait for /asorder/ URL to confirm navigation to Order screen
