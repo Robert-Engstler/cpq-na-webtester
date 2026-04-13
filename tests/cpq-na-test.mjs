@@ -933,28 +933,25 @@ async function run() {
           await vinPage.waitForTimeout(2000);
           console.log(`  Save Quotation done, URL: ${vinPage.url()}`);
 
-          // Navigate to Order screen — construct URL directly from current configure/UUID URL.
-          // The Order tab maps configure/UUID → asorder/UUID (same UUID, different path segment).
-          // Direct navigation is more reliable than clicking the Angular tab link.
-          const configureUrl = vinPage.url();
-          const asorderUrl = configureUrl.replace(/\/configure\/([^?#]+)/, '/asorder/$1');
-          if (asorderUrl !== configureUrl) {
-            console.log(`  Navigating directly to Order screen: ${asorderUrl}`);
-            await vinPage.goto(asorderUrl, { waitUntil: "domcontentloaded", timeout: 30000 });
+          // Click "Order" tab — locate by href pattern (works for all locales/brands).
+          // After Save Quotation the Order tab <a> has href containing /asorder/ — click it directly.
+          const orderTabLink = vinPage.locator('a[href*="/asorder/"]').first();
+          const orderTabVisible = await orderTabLink.waitFor({ state: "visible", timeout: 10000 }).then(() => true).catch(() => false);
+          if (orderTabVisible) {
+            console.log(`  Clicking Order tab link`);
+            await orderTabLink.click();
           } else {
-            // Fallback: click Order tab link by href pattern
-            const orderLinkHref = await vinPage.evaluate(() => {
-              const link = document.querySelector('a[href*="/asorder/"]');
-              if (link) { link.click(); return link.getAttribute('href'); }
-              // Last resort: text match
-              const all = [...document.querySelectorAll("a, button")];
-              const el = all.find(e => /^(Order|Commande)$/i.test(e.textContent?.trim()));
-              if (el) { el.click(); return el.textContent?.trim(); }
-              return null;
-            });
-            console.log(`  Order tab fallback clicked: ${orderLinkHref ?? "not found"}`);
-            await vinPage.waitForURL(/\/asorder\//, { timeout: 30000 });
+            // Fallback for fr_CA: URL is still configure/UUID — navigate directly to asorder/UUID
+            const currentUrl = vinPage.url();
+            const asorderUrl = currentUrl.replace(/\/configure\/([^?#]+)/, '/asorder/$1');
+            if (asorderUrl !== currentUrl) {
+              console.log(`  Order tab not found via href — navigating directly: ${asorderUrl}`);
+              await vinPage.goto(asorderUrl, { waitUntil: "domcontentloaded", timeout: 30000 });
+            } else {
+              console.log(`  Order tab not found and URL not configure/ — cannot navigate`);
+            }
           }
+          await vinPage.waitForURL(/\/asorder\//, { timeout: 30000 });
           console.log(`  On Order screen: ${vinPage.url()}`);
 
           await pass(`${prefix} Tab Quotation (search customer, save, → Order)`, { page: vinPage, startTime: t0 });
