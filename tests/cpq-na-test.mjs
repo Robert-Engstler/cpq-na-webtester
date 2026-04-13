@@ -959,7 +959,20 @@ async function run() {
         try {
           await dismissConsentBanner(vinPage);
           // Wait for Angular to render the Order tab content
-          await vinPage.waitForTimeout(5000);
+          await vinPage.waitForTimeout(3000);
+
+          // The Order screen requires clicking "Save Quotation" before Place Order becomes available.
+          // EN: "Save Quotation"  |  FR: "Sauvegarder le devis" / "Enregistrer"
+          const saveOnOrderBtn = vinPage.getByRole("button", { name: /save.?quotation|save quote|sauvegarder le devis|enregistrer le devis/i });
+          const saveOnOrderFound = await saveOnOrderBtn.first().waitFor({ state: "visible", timeout: 20000 }).then(() => true).catch(() => false);
+          if (saveOnOrderFound) {
+            console.log(`  Saving quotation on Order screen`);
+            await vinPage.locator(".page-unload-div.show, .page-unload-div").waitFor({ state: "hidden", timeout: 15000 }).catch(() => {});
+            await saveOnOrderBtn.first().click();
+            await vinPage.waitForTimeout(3000);
+          } else {
+            console.log(`  No Save Quotation button on Order screen — proceeding directly`);
+          }
 
           // Select dealer account ID if a select exists on this page
           const allOrderSelects = vinPage.locator("select");
