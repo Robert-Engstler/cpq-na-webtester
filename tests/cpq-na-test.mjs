@@ -933,22 +933,42 @@ async function run() {
           await vinPage.waitForTimeout(2000);
           console.log(`  Save Quotation done, URL: ${vinPage.url()}`);
 
-          // Click "Order" tab — locate by href pattern (works for all locales/brands).
-          // After Save Quotation the Order tab <a> has href containing /asorder/ — click it directly.
-          const orderTabLink = vinPage.locator('a[href*="/asorder/"]').first();
-          const orderTabVisible = await orderTabLink.waitFor({ state: "visible", timeout: 10000 }).then(() => true).catch(() => false);
-          if (orderTabVisible) {
-            console.log(`  Clicking Order tab link`);
-            await orderTabLink.click();
+          // Click "Order" tab in the top navigation.
+          // Strategy 1: find <a href*="/asorder/"> (Angular renders the routerLink as href)
+          // Strategy 2: find by visible text "Order" / "Commande" in nav (not sub-tabs)
+          // Strategy 3 (fr_CA fallback): URL is configure/UUID → navigate directly to asorder/UUID
+          const currentUrl = vinPage.url();
+
+          // Log all nav link hrefs to help diagnose selector issues
+          const navHrefs = await vinPage.evaluate(() =>
+            [...document.querySelectorAll("nav a, .navbar a, a[routerlink]")].map(a => a.getAttribute("href")).filter(Boolean)
+          ).catch(() => []);
+          console.log(`  Nav hrefs: ${navHrefs.join(" | ")}`);
+
+          const orderTabByHref = vinPage.locator('a[href*="/asorder/"]').first();
+          const orderTabByText = vinPage.locator("nav a, .navbar a, a.nav-link").filter({ hasText: /^\s*(Order|Commande)\s*$/i }).last();
+
+          if (await orderTabByHref.waitFor({ state: "visible", timeout: 8000 }).then(() => true).catch(() => false)) {
+            console.log(`  Clicking Order tab by href`);
+            await orderTabByHref.click();
+          } else if (await orderTabByText.waitFor({ state: "visible", timeout: 5000 }).then(() => true).catch(() => false)) {
+            console.log(`  Clicking Order tab by text`);
+            await orderTabByText.click();
           } else {
-            // Fallback for fr_CA: URL is still configure/UUID — navigate directly to asorder/UUID
-            const currentUrl = vinPage.url();
+            // fr_CA: still on configure/UUID URL — navigate directly
             const asorderUrl = currentUrl.replace(/\/configure\/([^?#]+)/, '/asorder/$1');
             if (asorderUrl !== currentUrl) {
-              console.log(`  Order tab not found via href — navigating directly: ${asorderUrl}`);
+              console.log(`  Order tab not found — navigating directly: ${asorderUrl}`);
               await vinPage.goto(asorderUrl, { waitUntil: "domcontentloaded", timeout: 30000 });
             } else {
-              console.log(`  Order tab not found and URL not configure/ — cannot navigate`);
+              // Last resort: JS evaluate to find any <a> with asorder in href or text "Order"
+              await vinPage.evaluate(() => {
+                const byHref = document.querySelector('a[href*="asorder"]');
+                if (byHref) { byHref.click(); return; }
+                const all = [...document.querySelectorAll("a")];
+                const byText = all.find(a => /^\s*(Order|Commande)\s*$/.test(a.textContent?.trim() ?? ""));
+                if (byText) byText.click();
+              });
             }
           }
           await vinPage.waitForURL(/\/asorder\//, { timeout: 30000 });
