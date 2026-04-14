@@ -1091,6 +1091,8 @@ async function run() {
         // Wait for Place Order button to disappear — confirms order is fully processed.
         await vinPage.getByRole("button", { name: /place order|placer la commande|passer la commande/i })
           .waitFor({ state: "hidden", timeout: 60000 }).catch(() => {});
+        // Wait for page-unload-div overlay to clear after order processing
+        await vinPage.locator(".page-unload-div").waitFor({ state: "hidden", timeout: 30000 }).catch(() => {});
         await dismissConsentBanner(vinPage);
         // Log page text for debugging PDF button selectors
         const postOrderPageText = await vinPage.locator("body").textContent({ timeout: 5000 }).catch(() => "");
@@ -1106,6 +1108,7 @@ async function run() {
             console.log(`  GC Order Details PDF button not found — skipping`);
             await pass(`${prefix} Download Genuine Care Order Details PDF`, { page: vinPage, startTime: t0 });
           } else {
+            await vinPage.locator(".page-unload-div").waitFor({ state: "hidden", timeout: 15000 }).catch(() => {});
             const [dl] = await Promise.all([
               vinPage.waitForEvent("download", { timeout: 45000 }),
               allDlBtns.nth(0).click(),
@@ -1138,6 +1141,7 @@ async function run() {
             console.log(`  Maintenance Agreement PDF button not found (only ${count} download buttons) — skipping`);
             await pass(`${prefix} Download Maintenance Agreement PDF`, { page: vinPage, startTime: t0 });
           } else {
+            await vinPage.locator(".page-unload-div").waitFor({ state: "hidden", timeout: 15000 }).catch(() => {});
             const [dl] = await Promise.all([
               vinPage.waitForEvent("download", { timeout: 45000 }),
               allDlBtns.nth(1).click(),
