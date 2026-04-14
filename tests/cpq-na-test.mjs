@@ -895,6 +895,9 @@ async function run() {
             // Cap at 10 — pick from the first page of results only
             const randomIdx = Math.floor(Math.random() * Math.min(selectCount, 10));
             console.log(`  Selecting customer ${randomIdx + 1} of ${selectCount}`);
+            // Wait for page-unload-div overlay to clear before clicking — it blocks the click
+            await vinPage.locator(".page-unload-div").waitFor({ state: "hidden", timeout: 15000 }).catch(() => {});
+            await selectBtns.nth(randomIdx).scrollIntoViewIfNeeded().catch(() => {});
             await selectBtns.nth(randomIdx).click();
             await vinPage.waitForTimeout(800);
           } else {
