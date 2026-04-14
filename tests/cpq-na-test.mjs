@@ -1108,10 +1108,12 @@ async function run() {
             console.log(`  GC Order Details PDF button not found — skipping`);
             await pass(`${prefix} Download Genuine Care Order Details PDF`, { page: vinPage, startTime: t0 });
           } else {
-            await vinPage.locator(".page-unload-div").waitFor({ state: "hidden", timeout: 15000 }).catch(() => {});
+            // page-unload-div in the header persists permanently on the post-order page —
+            // it never clears, so waitFor hidden would always time out. Use force: true to
+            // bypass the overlay intercept check and click the button directly.
             const [dl] = await Promise.all([
               vinPage.waitForEvent("download", { timeout: 45000 }),
-              allDlBtns.nth(0).click(),
+              allDlBtns.nth(0).click({ force: true }),
             ]);
             const gcOrderPath = `gc-order-details-${VIN}.pdf`;
             await dl.saveAs(gcOrderPath);
@@ -1141,10 +1143,9 @@ async function run() {
             console.log(`  Maintenance Agreement PDF button not found (only ${count} download buttons) — skipping`);
             await pass(`${prefix} Download Maintenance Agreement PDF`, { page: vinPage, startTime: t0 });
           } else {
-            await vinPage.locator(".page-unload-div").waitFor({ state: "hidden", timeout: 15000 }).catch(() => {});
             const [dl] = await Promise.all([
               vinPage.waitForEvent("download", { timeout: 45000 }),
-              allDlBtns.nth(1).click(),
+              allDlBtns.nth(1).click({ force: true }),
             ]);
             const maintPath = `maintenance-agreement-${VIN}.pdf`;
             await dl.saveAs(maintPath);
