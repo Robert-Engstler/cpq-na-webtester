@@ -456,10 +456,13 @@ async function run() {
           await dismissConsentBanner(vinPage);
 
           // Helper: wait for spinner
+          // NOTE: [class*='loading'] was intentionally removed — it is too broad and matches
+          // persistent layout elements (e.g. loading-container) that are never hidden,
+          // causing silent 30s timeouts on every call. Only target CPQ's specific overlay.
           const waitForSpinner = () => vinPage.waitForFunction(() => {
-            const spinner = document.querySelector("span.page-unload-anim, [class*='spinner'], [class*='loading']");
+            const spinner = document.querySelector("span.page-unload-anim, .page-unload-div");
             return !spinner || (spinner instanceof HTMLElement && spinner.offsetParent === null);
-          }, { timeout: 30000 }).catch(() => {});
+          }, { timeout: 10000 }).catch(() => {});
 
           // Select "Power version with standard hydraulic oil"
           try {
@@ -1037,8 +1040,9 @@ async function run() {
           // Re-click Place Order up to 3 times if the URL hasn't changed after 30s.
           let postOrderText = "";
           for (let attempt = 1; attempt <= 3; attempt++) {
-            // Wait for URL to change to numeric order ID — this is the definitive success signal
-            const urlChanged = await vinPage.waitForURL(/\/asorder\/\d{4,}/, { timeout: 30000 })
+            // Wait for URL to change to final SAP order ID (99xxxxxxxx format) — this is the definitive success signal.
+            // CPQ first navigates to an intermediate /asorder/NNNN URL before settling on the SAP order number.
+            const urlChanged = await vinPage.waitForURL(/\/asorder\/99\d{5,}/, { timeout: 30000 })
               .then(() => true).catch(() => false);
             if (urlChanged) {
               console.log(`  Order placed — URL: ${vinPage.url()}`);
@@ -1056,11 +1060,11 @@ async function run() {
           postOrderText = await vinPage.locator("body").textContent({ timeout: 5000 }).catch(() => "");
 
           // Extract order ID — priority order:
-          // 1. URL: /asorder/9901357151 (numeric segment = order ID)
+          // 1. URL: /asorder/9901357151 (SAP format, starts with 99)
           // 2. FR page: "ID de référence CPQ 9901357151"
           // 3. EN toast: "with the reference of 9901357151"
           // 4. Any 99XXXXXXX number
-          const urlOrderMatch = vinPage.url().match(/\/asorder\/(\d{4,})/);
+          const urlOrderMatch = vinPage.url().match(/\/asorder\/(99\d{5,})/);
           const orderNumMatch = urlOrderMatch
             ?? postOrderText.match(/r[eé]f[eé]rence\D{0,15}(\d{4,})/i)
             ?? postOrderText.match(/reference\s+of\s+(\d{4,})/i)
