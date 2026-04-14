@@ -919,6 +919,7 @@ async function run() {
             const count = await allEls.count();
             if (count === 0) continue;
             const tabEl = nth === "last" ? allEls.last() : allEls.first();
+            await vinPage.locator(".page-unload-div").waitFor({ state: "hidden", timeout: 10000 }).catch(() => {});
             await tabEl.click();
             await vinPage.waitForTimeout(1000);
           }
