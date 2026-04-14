@@ -870,8 +870,9 @@ async function run() {
           await searchField.waitFor({ timeout: 15000 });
           const searchTerms = ["T", "Test", "Lang", "Maple", "Agco"];
           let selectFound = false;
-          const selectBtns = vinPage.getByRole("button", { name: /^select$|^s[eé]lectionner$|^choisir$/i })
-            .or(vinPage.locator("button").filter({ hasText: /^select$|^s[eé]lectionner$|^choisir$/i }));
+          // Use a single locator — .or() with an overlapping selector doubles the count,
+          // causing randomIdx to exceed the real number of visible "Select" buttons.
+          const selectBtns = vinPage.locator("button").filter({ hasText: /^select$|^s[eé]lectionner$|^choisir$/i });
           // EN: "Search"  |  FR: "Chercher" / "Rechercher"
           const searchBtn = vinPage.getByRole("button", { name: /search|chercher|rechercher|trouver|find/i })
             .or(vinPage.locator("button").filter({ hasText: /search|chercher|rechercher|trouver|find/i }))
@@ -891,7 +892,8 @@ async function run() {
           // Select a random customer if results appeared — EN: "Select"  |  FR: "Sélectionner" / "Choisir"
           if (selectFound) {
             const selectCount = await selectBtns.count();
-            const randomIdx = Math.floor(Math.random() * selectCount);
+            // Cap at 10 — pick from the first page of results only
+            const randomIdx = Math.floor(Math.random() * Math.min(selectCount, 10));
             console.log(`  Selecting customer ${randomIdx + 1} of ${selectCount}`);
             await selectBtns.nth(randomIdx).click();
             await vinPage.waitForTimeout(800);
