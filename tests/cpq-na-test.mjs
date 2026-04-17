@@ -524,6 +524,15 @@ async function run() {
             }, { timeout: 15000 }).catch(() => {});
 
             const selCount = await allSelects.count();
+            console.log(`  [DIAG] Service selects found: ${selCount}`);
+            for (let di = 0; di < selCount; di++) {
+              const info = await allSelects.nth(di).evaluate(sel => ({
+                cls: sel.className,
+                val: sel.value,
+                opts: [...sel.options].filter(o => o.value.trim()).map(o => o.value).slice(0, 6),
+              }));
+              console.log(`  [DIAG] select[${di}] class="${info.cls}" value="${info.val}" opts=${JSON.stringify(info.opts)}`);
+            }
 
             if (selCount >= 2) {
               const startOpts = await allSelects.nth(0).evaluate(sel =>
