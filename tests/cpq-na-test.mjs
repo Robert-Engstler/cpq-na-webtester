@@ -567,19 +567,20 @@ async function run() {
           }
 
           // ── Machine Start Hour (all GC types) ────────────────────────────────
-          // The field has no name/id — found via nearby label span.
-          // EN: "Machine Start Hour"  |  FR (CA): label contains both "machine" and "heure"
-          const startHourInput = vinPage.locator(
+          // Strategy: find the container div via label span, then look for errors
+          // WITHIN that container only — avoids picking up unrelated page-level errors
+          // like "Select at least 2 service intervals" that also contain "between X and Y".
+          // EN: "Machine Start Hour"  |  FR (CA): label contains "machine" and "heure"
+          const startHourContainer = vinPage.locator(
             "xpath=//span[contains(translate(text(),'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'machine start')]" +
-            "/ancestor::div[.//input][1]//input[@type='number' or @type='text']"
+            "/ancestor::div[.//input][1]"
           ).or(vinPage.locator(
             "xpath=//span[contains(translate(text(),'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'machine') and contains(translate(text(),'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'heure')]" +
-            "/ancestor::div[.//input][1]//input[@type='number' or @type='text']"
-          )).or(
-            vinPage.locator("input[name*='machineStart'], input[id*='machineStart'], input[name*='startHour'], input[id*='startHour']")
-          ).first();
+            "/ancestor::div[.//input][1]"
+          )).first();
 
-          if (await startHourInput.count() > 0) {
+          if (await startHourContainer.count() > 0) {
+            const startHourInput = startHourContainer.locator("input").first();
             await startHourInput.scrollIntoViewIfNeeded();
             await startHourInput.click({ clickCount: 3 });
             // Enter "1" not "0": if the field is pre-filled with 0 (Annual), filling "0" again
@@ -587,28 +588,29 @@ async function run() {
             await startHourInput.fill("1");
             await startHourInput.dispatchEvent("input");
             await startHourInput.press("Tab");
-            await vinPage.waitForTimeout(1000);
+            await vinPage.waitForTimeout(1500);
 
-            // Grab all error labels — no text filter, works for EN + FR
-            const allErrorTexts = await vinPage.locator(".form-error-label, .text-danger")
-              .allTextContents()
-              .catch(() => []);
-            // Only treat as a range message if it contains "range" or "between" — avoids
-            // misidentifying unrelated messages like "Select at least 2 service intervals for 15% discount"
-            const errorMsg = allErrorTexts.find(t => /(?:range|between|entre|intervalle)\s*\d/i.test(t)) ?? "";
-            if (errorMsg) console.log(`  Machine Start Hour error msg: "${errorMsg.trim()}"`);
+            // Look for error WITHIN the container only — not page-wide.
+            // This avoids misidentifying unrelated "between X and Y" messages from other fields.
+            const containerErrorText = await startHourContainer
+              .locator(".form-error-label, .text-danger, [class*='error'], [class*='invalid']")
+              .first()
+              .textContent({ timeout: 2000 })
+              .catch(() => "");
+            if (containerErrorText) console.log(`  Machine Start Hour error msg: "${containerErrorText.trim()}"`);
 
-            // Generic: extract first two numbers from the error message (min then max)
-            // Works for EN "range 50 to 500", FR "entre 50 et 500", etc.
-            const numbersInMsg = errorMsg.replace(/,/g, "").match(/\d+/g);
+            // Extract min and max from the error (works for EN/FR formats)
+            const numbersInMsg = containerErrorText.replace(/,/g, "").match(/\d+/g);
             if (numbersInMsg && numbersInMsg.length >= 2) {
               const minVal = parseInt(numbersInMsg[0], 10);
-              const validValue = String(minVal + 1);
+              const maxVal = parseInt(numbersInMsg[1], 10);
+              // Use min+1 but clamp to max in case min+1 would exceed the valid range
+              const validValue = String(Math.min(minVal + 1, maxVal));
               await startHourInput.click({ clickCount: 3 });
               await startHourInput.fill(validValue);
               await startHourInput.dispatchEvent("input");
               await startHourInput.press("Tab");
-              console.log(`  Machine Start Hour: ${validValue} (range: ${numbersInMsg[0]} to ${numbersInMsg[1]})`);
+              console.log(`  Machine Start Hour: ${validValue} (range: ${minVal} to ${maxVal})`);
             } else {
               // Range message not found — revert field to "0" (original pre-filled value for Annual).
               // Leaving "1" can block Apply Changes if the field has no minimum and 0 is the right default.
@@ -616,7 +618,7 @@ async function run() {
               await startHourInput.fill("0");
               await startHourInput.dispatchEvent("input");
               await startHourInput.press("Tab");
-              console.log(`  Machine Start Hour range message not found — reverted to 0`);
+              console.log(`  Machine Start Hour: no range error found — reverted to 0`);
             }
             await vinPage.waitForTimeout(500);
             await waitForSpinner();
