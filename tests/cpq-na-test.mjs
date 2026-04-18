@@ -1118,7 +1118,7 @@ async function run() {
           // Post-order page shows two "Téléchargement" / "Download" buttons:
           //   nth(0) = Genuine Care Order Details  ("Genuine Care Détails de la commande")
           //   nth(1) = Maintenance Agreement        ("Accord de maintenance")
-          const allDlBtns = vinPage.getByRole("button", { name: /t[eé]l[eé]chargement|download/i });
+          const allDlBtns = vinPage.getByRole("button", { name: /t[eé]l[eé]charg[a-z]*|download/i });
           const dlFound = await allDlBtns.first().waitFor({ timeout: 20000 }).then(() => true).catch(() => false);
           if (!dlFound) {
             console.log(`  GC Order Details PDF button not found — skipping`);
@@ -1153,7 +1153,7 @@ async function run() {
         await dismissConsentBanner(vinPage);
         t0 = Date.now();
         try {
-          const allDlBtns = vinPage.getByRole("button", { name: /t[eé]l[eé]chargement|download/i });
+          const allDlBtns = vinPage.getByRole("button", { name: /t[eé]l[eé]charg[a-z]*|download/i });
           const count = await allDlBtns.count();
           if (count < 2) {
             console.log(`  Maintenance Agreement PDF button not found (only ${count} download buttons) — skipping`);
