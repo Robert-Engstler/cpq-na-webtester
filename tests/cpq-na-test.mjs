@@ -884,30 +884,24 @@ async function run() {
           // Wait for page-unload-div overlay to clear before interacting with the quotation form
           await vinPage.locator(".page-unload-div.show, .page-unload-div").waitFor({ state: "hidden", timeout: 30000 }).catch(() => {});
 
-          // Search for customer by last name "Test"
-          // Field has id="lastName" with no placeholder or name attribute
-          // CA Stage may not have "Test" customers — try multiple terms, proceed without if none found
-          const searchField = vinPage.locator("input#lastName, input[id*='lastName'], input[placeholder*='last'], input[name*='lastName']").first();
+          // Search by first name "t" — agreed approach, returns results on all environments.
+          const firstNameField = vinPage.locator("input#firstName, input[id*='firstName'], input[placeholder*='first'], input[name*='firstName']").first();
+          const lastNameField  = vinPage.locator("input#lastName,  input[id*='lastName'],  input[placeholder*='last'],  input[name*='lastName']").first();
+          const searchField = await firstNameField.count() > 0 ? firstNameField : lastNameField;
           await searchField.waitFor({ timeout: 15000 });
-          const searchTerms = ["T", "Test", "Lang", "Maple", "Agco"];
           let selectFound = false;
-          // Use a single locator — .or() with an overlapping selector doubles the count,
-          // causing randomIdx to exceed the real number of visible "Select" buttons.
           const selectBtns = vinPage.locator("button").filter({ hasText: /^select$|^s[eé]lectionner$|^choisir$/i });
-          // EN: "Search"  |  FR: "Chercher" / "Rechercher"
           const searchBtn = vinPage.getByRole("button", { name: /search|chercher|rechercher|trouver|find/i })
             .or(vinPage.locator("button").filter({ hasText: /search|chercher|rechercher|trouver|find/i }))
             .first();
-          for (const term of searchTerms) {
-            await searchField.fill(term);
-            // Wait for overlay to clear before each search click
-            await vinPage.locator(".page-unload-div.show, .page-unload-div").waitFor({ state: "hidden", timeout: 10000 }).catch(() => {});
-            const searchEnabled = await searchBtn.isEnabled().catch(() => false);
-            if (!searchEnabled) continue;
+          await searchField.fill("t");
+          await vinPage.locator(".page-unload-div.show, .page-unload-div").waitFor({ state: "hidden", timeout: 10000 }).catch(() => {});
+          const searchEnabled = await searchBtn.isEnabled().catch(() => false);
+          if (searchEnabled) {
             await searchBtn.click();
             await vinPage.waitForTimeout(2000);
-            selectFound = await selectBtns.first().waitFor({ timeout: 3000 }).then(() => true).catch(() => false);
-            if (selectFound) { console.log(`  Customer search matched for term "${term}"`); break; }
+            selectFound = await selectBtns.first().waitFor({ timeout: 5000 }).then(() => true).catch(() => false);
+            if (selectFound) console.log(`  Customer search "t" returned results`);
           }
 
           // Select a random customer if results appeared — EN: "Select"  |  FR: "Sélectionner" / "Choisir"
