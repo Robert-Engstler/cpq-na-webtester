@@ -589,33 +589,25 @@ async function run() {
             const startHourInput = startHourContainer.locator("input").first();
             await startHourInput.scrollIntoViewIfNeeded();
 
-            // Enter "1" to trigger Angular validation — CPQ does not set min/max HTML attributes,
-            // so we must provoke the error message to discover the actual valid minimum.
+            // Read the range from the container text (static hint always visible next to the field).
+            // Scoped to container so we never pick up unrelated "0 to 0" errors from other fields.
+            const containerText = await startHourContainer.textContent().catch(() => "");
+            const numbers = containerText.replace(/,/g, "").match(/(?:range|between|entre|intervalle)\D{0,10}?(\d+)\D{1,10}?(\d+)/i);
+
+            let valueToFill = "1";
+            if (numbers) {
+              const minVal = parseInt(numbers[1], 10);
+              const maxVal = parseInt(numbers[2], 10);
+              valueToFill = String(Math.min(minVal, maxVal));
+              console.log(`  Machine Start Hour: ${valueToFill} (range: ${minVal} to ${maxVal})`);
+            } else {
+              console.log(`  Machine Start Hour: 1 (no range hint found in container)`);
+            }
+
             await startHourInput.click({ clickCount: 3 });
-            await startHourInput.fill("1");
+            await startHourInput.fill(valueToFill);
             await startHourInput.dispatchEvent("input");
             await startHourInput.press("Tab");
-            await vinPage.waitForTimeout(1500);
-
-            // Page-wide range regex — the error label may render outside the field container.
-            const allErrors = await vinPage.locator(".form-error-label, .text-danger")
-              .allTextContents().catch(() => []);
-            const rangeMsg = allErrors.find(t => /(?:range|between|entre|intervalle)\s*\d/i.test(t)) ?? "";
-            const numbers = rangeMsg.replace(/,/g, "").match(/\d+/g);
-
-            if (numbers && numbers.length >= 2) {
-              const minVal = parseInt(numbers[0], 10);
-              const maxVal = parseInt(numbers[1], 10);
-              const validValue = String(Math.min(minVal, maxVal));
-              await startHourInput.click({ clickCount: 3 });
-              await startHourInput.fill(validValue);
-              await startHourInput.dispatchEvent("input");
-              await startHourInput.press("Tab");
-              console.log(`  Machine Start Hour: ${validValue} (range: ${minVal} to ${maxVal})`);
-            } else {
-              // No range error — "1" is accepted (or field has no constraint).
-              console.log(`  Machine Start Hour: 1 (no range constraint found)`);
-            }
             await vinPage.waitForTimeout(500);
             await waitForSpinner();
           }
@@ -657,8 +649,36 @@ async function run() {
             const errs = await vinPage.locator(".form-error-label, .text-danger, [class*='error'], [class*='invalid']")
               .allTextContents().catch(() => []);
             if (errs.length) console.log(`  Errors on page: ${errs.map(t => t.trim()).filter(Boolean).join(" | ")}`);
-            // Retry Apply Changes once
-            console.log(`  Add to Configuration not visible — retrying Apply Changes`);
+
+            // Fix Machine Start Hour if CPQ validation shows the actual valid range here.
+            const startHourErr = errs.find(t => /machine start|heure/i.test(t) || /(?:range|between|entre|intervalle)\s*\d/i.test(t));
+            if (startHourErr) {
+              const m = startHourErr.replace(/,/g, "").match(/(\d+)\D{1,10}?(\d+)/);
+              if (m) {
+                const minVal = parseInt(m[1], 10);
+                const maxVal = parseInt(m[2], 10);
+                if (minVal !== maxVal || minVal > 0) {
+                  const corrected = String(Math.min(minVal, maxVal));
+                  const shInput = vinPage.locator(
+                    "xpath=//span[contains(translate(text(),'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'machine start')]" +
+                    "/ancestor::div[.//input][1]//input"
+                  ).or(vinPage.locator(
+                    "xpath=//span[contains(translate(text(),'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'machine') and contains(translate(text(),'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'heure')]" +
+                    "/ancestor::div[.//input][1]//input"
+                  )).first();
+                  if (await shInput.count() > 0) {
+                    await shInput.click({ clickCount: 3 });
+                    await shInput.fill(corrected);
+                    await shInput.dispatchEvent("input");
+                    await shInput.press("Tab");
+                    await vinPage.waitForTimeout(500);
+                    console.log(`  Machine Start Hour corrected to ${corrected} (range: ${minVal} to ${maxVal})`);
+                  }
+                }
+              }
+            }
+
+            console.log(`  Retrying Apply Changes`);
             await dismissConsentBanner(vinPage);
             const retryApply = vinPage.getByRole("button", { name: /apply changes|appliquer/i });
             if (await retryApply.count() > 0) {
