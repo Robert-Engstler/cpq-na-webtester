@@ -583,28 +583,35 @@ async function run() {
             const startHourInput = startHourContainer.locator("input").first();
             await startHourInput.scrollIntoViewIfNeeded();
 
-            // Read min/max directly from the input element attributes — no error-triggering needed.
-            const { minAttr, maxAttr } = await startHourInput.evaluate(el => ({
-              minAttr: el.getAttribute("min"),
-              maxAttr: el.getAttribute("max"),
-            }));
-            const minVal = minAttr !== null && minAttr !== "" ? parseInt(minAttr, 10) : null;
-            const maxVal = maxAttr !== null && maxAttr !== "" ? parseInt(maxAttr, 10) : null;
-
-            let valueToFill;
-            if (minVal !== null && !isNaN(minVal)) {
-              valueToFill = String(minVal);
-            } else {
-              valueToFill = "0";
-            }
-
+            // Enter "1" to trigger Angular validation — CPQ does not set min/max HTML attributes,
+            // so we must provoke the error message to discover the actual valid minimum.
             await startHourInput.click({ clickCount: 3 });
-            await startHourInput.fill(valueToFill);
+            await startHourInput.fill("1");
             await startHourInput.dispatchEvent("input");
             await startHourInput.press("Tab");
+            await vinPage.waitForTimeout(1500);
+
+            // Page-wide range regex — the error label may render outside the field container.
+            const allErrors = await vinPage.locator(".form-error-label, .text-danger")
+              .allTextContents().catch(() => []);
+            const rangeMsg = allErrors.find(t => /(?:range|between|entre|intervalle)\s*\d/i.test(t)) ?? "";
+            const numbers = rangeMsg.replace(/,/g, "").match(/\d+/g);
+
+            if (numbers && numbers.length >= 2) {
+              const minVal = parseInt(numbers[0], 10);
+              const maxVal = parseInt(numbers[1], 10);
+              const validValue = String(Math.min(minVal, maxVal));
+              await startHourInput.click({ clickCount: 3 });
+              await startHourInput.fill(validValue);
+              await startHourInput.dispatchEvent("input");
+              await startHourInput.press("Tab");
+              console.log(`  Machine Start Hour: ${validValue} (range: ${minVal} to ${maxVal})`);
+            } else {
+              // No range error — "1" is accepted (or field has no constraint).
+              console.log(`  Machine Start Hour: 1 (no range constraint found)`);
+            }
             await vinPage.waitForTimeout(500);
             await waitForSpinner();
-            console.log(`  Machine Start Hour: ${valueToFill} (min=${minVal ?? "none"}, max=${maxVal ?? "none"})`);
           }
 
           if (manualSpecs.length > 0) {
