@@ -10,7 +10,7 @@ import { fileURLToPath } from "url";
 import { dirname, join } from "path";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const OUT = join(__dirname, "../../docs/project-summary.html");
+const OUT = join(__dirname, "../docs/project-summary.html");
 
 // ── Git changelog (last 30 commits) ──────────────────────────────────────────
 let changelogHtml = "";

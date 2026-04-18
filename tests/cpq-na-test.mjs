@@ -262,8 +262,8 @@ function resolvePreset(preset, startOpts, lastOpts, durationOpts) {
     case "Minimum":
     default:
       return {
-        start:    startOpts[1]  ?? startOpts[0],
-        last:     lastOpts[1]   ?? lastOpts[0],
+        start:    startOpts[0],              // Lowest option (e.g. 50h) — ensures start < last
+        last:     lastOpts[1]   ?? lastOpts[0], // Second option (e.g. 500h) — always > start
         duration: "12",
       };
   }
@@ -524,15 +524,6 @@ async function run() {
             }, { timeout: 15000 }).catch(() => {});
 
             const selCount = await allSelects.count();
-            console.log(`  [DIAG] Service selects found: ${selCount}`);
-            for (let di = 0; di < selCount; di++) {
-              const info = await allSelects.nth(di).evaluate(sel => ({
-                cls: sel.className,
-                val: sel.value,
-                opts: [...sel.options].filter(o => o.value.trim()).map(o => o.value).slice(0, 6),
-              }));
-              console.log(`  [DIAG] select[${di}] class="${info.cls}" value="${info.val}" opts=${JSON.stringify(info.opts)}`);
-            }
 
             if (selCount >= 2) {
               const startOpts = await allSelects.nth(0).evaluate(sel =>
@@ -591,46 +582,29 @@ async function run() {
           if (await startHourContainer.count() > 0) {
             const startHourInput = startHourContainer.locator("input").first();
             await startHourInput.scrollIntoViewIfNeeded();
+
+            // Read min/max directly from the input element attributes — no error-triggering needed.
+            const { minAttr, maxAttr } = await startHourInput.evaluate(el => ({
+              minAttr: el.getAttribute("min"),
+              maxAttr: el.getAttribute("max"),
+            }));
+            const minVal = minAttr !== null && minAttr !== "" ? parseInt(minAttr, 10) : null;
+            const maxVal = maxAttr !== null && maxAttr !== "" ? parseInt(maxAttr, 10) : null;
+
+            let valueToFill;
+            if (minVal !== null && !isNaN(minVal)) {
+              valueToFill = String(minVal);
+            } else {
+              valueToFill = "0";
+            }
+
             await startHourInput.click({ clickCount: 3 });
-            // Enter "1" not "0": if the field is pre-filled with 0 (Annual), filling "0" again
-            // produces no change event and Angular never fires the validation message.
-            await startHourInput.fill("1");
+            await startHourInput.fill(valueToFill);
             await startHourInput.dispatchEvent("input");
             await startHourInput.press("Tab");
-            await vinPage.waitForTimeout(1500);
-
-            // Look for error WITHIN the container only — not page-wide.
-            // This avoids misidentifying unrelated "between X and Y" messages from other fields.
-            const containerErrorText = await startHourContainer
-              .locator(".form-error-label, .text-danger, [class*='error'], [class*='invalid']")
-              .first()
-              .textContent({ timeout: 2000 })
-              .catch(() => "");
-            if (containerErrorText) console.log(`  Machine Start Hour error msg: "${containerErrorText.trim()}"`);
-
-            // Extract min and max from the error (works for EN/FR formats)
-            const numbersInMsg = containerErrorText.replace(/,/g, "").match(/\d+/g);
-            if (numbersInMsg && numbersInMsg.length >= 2) {
-              const minVal = parseInt(numbersInMsg[0], 10);
-              const maxVal = parseInt(numbersInMsg[1], 10);
-              // Use min+1 but clamp to max in case min+1 would exceed the valid range
-              const validValue = String(Math.min(minVal + 1, maxVal));
-              await startHourInput.click({ clickCount: 3 });
-              await startHourInput.fill(validValue);
-              await startHourInput.dispatchEvent("input");
-              await startHourInput.press("Tab");
-              console.log(`  Machine Start Hour: ${validValue} (range: ${minVal} to ${maxVal})`);
-            } else {
-              // Range message not found — revert field to "0" (original pre-filled value for Annual).
-              // Leaving "1" can block Apply Changes if the field has no minimum and 0 is the right default.
-              await startHourInput.click({ clickCount: 3 });
-              await startHourInput.fill("0");
-              await startHourInput.dispatchEvent("input");
-              await startHourInput.press("Tab");
-              console.log(`  Machine Start Hour: no range error found — reverted to 0`);
-            }
             await vinPage.waitForTimeout(500);
             await waitForSpinner();
+            console.log(`  Machine Start Hour: ${valueToFill} (min=${minVal ?? "none"}, max=${maxVal ?? "none"})`);
           }
 
           if (manualSpecs.length > 0) {
