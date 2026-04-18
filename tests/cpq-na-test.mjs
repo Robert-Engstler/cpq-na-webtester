@@ -262,8 +262,8 @@ function resolvePreset(preset, startOpts, lastOpts, durationOpts) {
     case "Minimum":
     default:
       return {
-        start:    startOpts[0],              // Lowest option (e.g. 50h) — ensures start < last
-        last:     lastOpts[1]   ?? lastOpts[0], // Second option (e.g. 500h) — always > start
+        start:    startOpts[1]  ?? startOpts[0],
+        last:     lastOpts[1]   ?? lastOpts[0],
         duration: "12",
       };
   }
