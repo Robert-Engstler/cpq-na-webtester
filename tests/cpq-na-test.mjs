@@ -1031,11 +1031,10 @@ async function run() {
               const opts = await allOrderSelects.nth(si).evaluate(sel =>
                 [...sel.options].filter(o => o.value.trim()).map(o => o.value)
               );
-              if (opts.length > 1) {
-                const pick = opts[Math.floor(Math.random() * opts.length)];
-                await allOrderSelects.nth(si).selectOption(pick);
+              if (opts.length >= 1) {
+                await allOrderSelects.nth(si).selectOption(opts[0]);
                 await vinPage.waitForTimeout(500);
-                console.log(`  Selected from select[${si}]: ${pick}`);
+                console.log(`  Selected from select[${si}]: ${opts[0]}`);
                 break;
               }
             }
