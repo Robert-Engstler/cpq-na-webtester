@@ -904,16 +904,14 @@ async function run() {
             if (selectFound) console.log(`  Customer search "t" returned results`);
           }
 
-          // Select a random customer if results appeared — EN: "Select"  |  FR: "Sélectionner" / "Choisir"
+          // Select first customer from results — EN: "Select"  |  FR: "Sélectionner" / "Choisir"
           if (selectFound) {
             const selectCount = await selectBtns.count();
-            // Cap at 10 — pick from the first page of results only
-            const randomIdx = Math.floor(Math.random() * Math.min(selectCount, 10));
-            console.log(`  Selecting customer ${randomIdx + 1} of ${selectCount}`);
+            console.log(`  Selecting first customer of ${selectCount}`);
             // Wait for page-unload-div overlay to clear before clicking — it blocks the click
             await vinPage.locator(".page-unload-div").waitFor({ state: "hidden", timeout: 15000 }).catch(() => {});
-            await selectBtns.nth(randomIdx).scrollIntoViewIfNeeded().catch(() => {});
-            await selectBtns.nth(randomIdx).click();
+            await selectBtns.nth(0).scrollIntoViewIfNeeded().catch(() => {});
+            await selectBtns.nth(0).click();
             await vinPage.waitForTimeout(800);
           } else {
             console.log(`  No customers found — proceeding without customer selection`);
