@@ -1023,22 +1023,42 @@ async function run() {
             console.log(`  No Save Quotation button on Order screen — proceeding directly`);
           }
 
-          // Select dealer account ID if a select exists on this page
-          const allOrderSelects = vinPage.locator("select");
-          const orderSelectCount = await allOrderSelects.count();
-          if (orderSelectCount > 0) {
-            for (let si = 0; si < orderSelectCount; si++) {
-              const opts = await allOrderSelects.nth(si).evaluate(sel =>
-                [...sel.options].filter(o => o.value.trim()).map(o => o.value)
-              );
-              if (opts.length >= 1) {
-                await allOrderSelects.nth(si).selectOption(opts[0]);
+          // Select dealer account — native <select> (US) or custom Angular dropdown (CA FR)
+          let dealerSelected = false;
+          const nativeSelects = vinPage.locator("select");
+          const nativeSelectCount = await nativeSelects.count();
+          for (let si = 0; si < nativeSelectCount && !dealerSelected; si++) {
+            const opts = await nativeSelects.nth(si).evaluate(sel =>
+              [...sel.options].filter(o => o.value.trim()).map(o => o.value)
+            );
+            if (opts.length >= 1) {
+              await nativeSelects.nth(si).selectOption(opts[0]);
+              await vinPage.waitForTimeout(500);
+              console.log(`  Dealer account (native select): ${opts[0]}`);
+              dealerSelected = true;
+            }
+          }
+          if (!dealerSelected) {
+            // Custom Angular/ng-select dropdown on CA FR Order page
+            const dropdownTrigger = vinPage.locator(
+              "[class*='dealer-account'] button, mat-select, [role='combobox'], .ng-select .ng-arrow-wrapper, [class*='select-field'] button"
+            ).first();
+            if (await dropdownTrigger.count() > 0) {
+              await dropdownTrigger.click();
+              await vinPage.waitForTimeout(600);
+              const firstOpt = vinPage.locator(
+                "mat-option, [role='option'], .ng-option, [class*='dropdown'] li, [class*='option-item']"
+              ).first();
+              if (await firstOpt.count() > 0) {
+                const txt = (await firstOpt.textContent() ?? "").trim();
+                await firstOpt.click();
                 await vinPage.waitForTimeout(500);
-                console.log(`  Selected from select[${si}]: ${opts[0]}`);
-                break;
+                console.log(`  Dealer account (custom dropdown): ${txt}`);
+                dealerSelected = true;
               }
             }
           }
+          if (!dealerSelected) console.log(`  No dealer account dropdown found — proceeding`);
 
           // EN: "Place Order"  |  FR: "Placer la commande" / "Passer la commande"
           const placeOrderBtn = vinPage.getByRole("button", { name: /place order|placer la commande|passer la commande/i });
