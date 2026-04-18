@@ -551,14 +551,31 @@ async function run() {
                 await waitForSpinner();
                 console.log(`  Last Service: ${preset.last} (${vinSvcPreset})`);
               }
+              // Find the Duration select by option content — not by index, since Angular
+              // may re-render the form after Start/Last are set, shifting select positions.
+              // Duration options are month values (≤120); service hour options are much larger.
               try {
-                const freshSelects = vinPage.locator("select.select-dropdown-duration, select[class*='duration'], select[class*='service']");
-                const freshCount = await freshSelects.count();
-                if (freshCount >= 3) {
-                  await freshSelects.nth(2).selectOption(preset.duration, { timeout: 10000 });
+                const allAfter = vinPage.locator("select.select-dropdown-duration, select[class*='duration'], select[class*='service']");
+                const afterCount = await allAfter.count();
+                let durSelect = null;
+                for (let i = 0; i < afterCount; i++) {
+                  const opts = await allAfter.nth(i).evaluate(sel =>
+                    [...sel.options].filter(o => o.value.trim()).map(o => parseInt(o.value, 10))
+                  );
+                  if (opts.length > 0 && opts.every(v => v <= 120)) {
+                    durSelect = allAfter.nth(i);
+                    break;
+                  }
+                }
+                if (durSelect) {
+                  await durSelect.scrollIntoViewIfNeeded();
+                  await durSelect.selectOption(preset.duration);
+                  await durSelect.dispatchEvent("change");
                   await vinPage.waitForTimeout(500);
                   await waitForSpinner();
                   console.log(`  Duration: ${preset.duration} (${vinSvcPreset})`);
+                } else {
+                  console.log(`  Duration select not found by option content — skipping`);
                 }
               } catch {
                 console.log(`  Duration select not available — skipping`);
