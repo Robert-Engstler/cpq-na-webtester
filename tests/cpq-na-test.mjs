@@ -912,7 +912,9 @@ async function run() {
             await vinPage.locator(".page-unload-div").waitFor({ state: "hidden", timeout: 15000 }).catch(() => {});
             await selectBtns.nth(0).scrollIntoViewIfNeeded().catch(() => {});
             await selectBtns.nth(0).click();
-            await vinPage.waitForTimeout(800);
+            // Wait for the page-unload overlay to appear then clear after customer selection
+            await vinPage.locator(".page-unload-div").waitFor({ state: "visible", timeout: 5000 }).catch(() => {});
+            await vinPage.locator(".page-unload-div").waitFor({ state: "hidden", timeout: 20000 }).catch(() => {});
           } else {
             console.log(`  No customers found — proceeding without customer selection`);
           }
