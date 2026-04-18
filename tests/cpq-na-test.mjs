@@ -27,7 +27,7 @@
  */
 
 import { chromium } from "playwright";
-import { readFileSync, existsSync } from "fs";
+import { readFileSync, existsSync, writeFileSync } from "fs";
 import { execSync } from "child_process";
 
 // ── Environment ───────────────────────────────────────────────────────────────
@@ -188,6 +188,36 @@ async function screenshotToBlob(page, label) {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
+
+// Clicks a PDF button that may either trigger a browser download OR open a new tab.
+// Returns the local file path on success, or null if nothing happened.
+async function clickAndSavePdf(btnLocator, filePath, context) {
+  const newTabPromise = context.waitForEvent("page", { timeout: 30000 }).catch(() => null);
+  const dlPromise     = btnLocator.page().waitForEvent("download", { timeout: 8000 }).catch(() => null);
+  await btnLocator.click({ force: true });
+  const dl = await dlPromise;
+  if (dl) {
+    await dl.saveAs(filePath);
+    console.log(`  Saved (download): ${dl.suggestedFilename()}`);
+    return filePath;
+  }
+  const pdfPage = await newTabPromise;
+  if (pdfPage) {
+    await pdfPage.waitForLoadState("networkidle", { timeout: 20000 }).catch(() => {});
+    const pdfUrl = pdfPage.url();
+    console.log(`  PDF tab URL: ${pdfUrl}`);
+    const resp = await fetch(pdfUrl);
+    if (resp.ok) {
+      const buf = Buffer.from(await resp.arrayBuffer());
+      writeFileSync(filePath, buf);
+      console.log(`  Saved (new tab): ${filePath}`);
+      await pdfPage.close();
+      return filePath;
+    }
+    await pdfPage.close();
+  }
+  return null;
+}
 
 async function dismissConsentBanner(page) {
   try {
@@ -1143,23 +1173,10 @@ async function run() {
             console.log(`  GC Order Details PDF button not found — skipping`);
             await pass(`${prefix} Download Genuine Care Order Details PDF`, { page: vinPage, startTime: t0 });
           } else {
-            // page-unload-div in the header persists permanently on the post-order page —
-            // it never clears, so waitFor hidden would always time out. Use force: true to
-            // bypass the overlay intercept check and click the button directly.
-            const [dl] = await Promise.all([
-              vinPage.waitForEvent("download", { timeout: 45000 }),
-              allDlBtns.nth(0).click({ force: true }),
-            ]);
             const gcOrderPath = `gc-order-details-${VIN}.pdf`;
-            await dl.saveAs(gcOrderPath);
-            allPdfPaths.push(gcOrderPath);
-            const gcFilename = dl.suggestedFilename();
-            console.log(`  Saved: ${gcFilename}`);
-            // Extract order ID from PDF filename if not yet captured
-            if (!orderId) {
-              const idMatch = gcFilename.match(/\b(99\d{5,})\b/) ?? gcFilename.match(/(\d{7,})/);
-              if (idMatch) { orderId = idMatch[1]; orderIdsMap[VIN] = orderId; console.log(`  Order ID from PDF filename: ${orderId}`); }
-            }
+            const saved = await clickAndSavePdf(allDlBtns.nth(0), gcOrderPath, context);
+            if (saved) allPdfPaths.push(saved);
+            else console.log(`  GC Order Details PDF — no download or new tab`);
             await pass(`${prefix} Download Genuine Care Order Details PDF`, { page: vinPage, startTime: t0 });
           }
         } catch (err) {
@@ -1178,14 +1195,10 @@ async function run() {
             console.log(`  Maintenance Agreement PDF button not found (only ${count} download buttons) — skipping`);
             await pass(`${prefix} Download Maintenance Agreement PDF`, { page: vinPage, startTime: t0 });
           } else {
-            const [dl] = await Promise.all([
-              vinPage.waitForEvent("download", { timeout: 45000 }),
-              allDlBtns.nth(1).click({ force: true }),
-            ]);
             const maintPath = `maintenance-agreement-${VIN}.pdf`;
-            await dl.saveAs(maintPath);
-            allPdfPaths.push(maintPath);
-            console.log(`  Saved: ${dl.suggestedFilename()}`);
+            const saved = await clickAndSavePdf(allDlBtns.nth(1), maintPath, context);
+            if (saved) allPdfPaths.push(saved);
+            else console.log(`  Maintenance Agreement PDF — no download or new tab`);
             await pass(`${prefix} Download Maintenance Agreement PDF`, { page: vinPage, startTime: t0 });
           }
         } catch (err) {
