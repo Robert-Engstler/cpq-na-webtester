@@ -1170,9 +1170,13 @@ async function run() {
             }
             // URL still has UUID — order is queued or processing. Re-click Place Order.
             if (attempt < 3) {
-              console.log(`  Order not confirmed after 90s (attempt ${attempt}/3) — re-clicking Place Order`);
-              const btnVisible = await placeOrderBtn.waitFor({ state: "visible", timeout: 5000 }).then(() => true).catch(() => false);
-              if (btnVisible) await placeOrderBtn.click();
+              const btnStillVisible = await placeOrderBtn.waitFor({ state: "visible", timeout: 5000 }).then(() => true).catch(() => false);
+              if (btnStillVisible) {
+                console.log(`  Order not confirmed after 90s (attempt ${attempt}/3) — button still visible, re-clicking Place Order`);
+                await placeOrderBtn.click();
+              } else {
+                console.log(`  Order not confirmed after 90s (attempt ${attempt}/3) — button gone, order processing, waiting longer`);
+              }
             } else {
               console.log(`  Order not confirmed after 3 attempts`);
             }
