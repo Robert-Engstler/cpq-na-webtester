@@ -1003,10 +1003,18 @@ async function run() {
           await vinPage.waitForTimeout(500);
           console.log(`  Clicking Save Quotation`);
           await saveQuotationBtn.click();
-          // Wait for save: first wait for the overlay to appear (confirming action fired),
-          // then wait for it to clear (save complete). Success toast appears briefly after.
-          await vinPage.locator(".page-unload-div").waitFor({ state: "visible", timeout: 5000 }).catch(() => {});
-          await vinPage.locator(".page-unload-div").waitFor({ state: "hidden", timeout: 20000 }).catch(() => {});
+          // Check if spinner appeared — confirms click registered; retry once if not
+          let spinnerAppeared = await vinPage.locator(".page-unload-div").waitFor({ state: "visible", timeout: 5000 }).then(() => true).catch(() => false);
+          console.log(`  Spinner after Save Quotation: ${spinnerAppeared ? "YES — save started" : "NO — retrying click"}`);
+          if (!spinnerAppeared) {
+            await vinPage.waitForTimeout(1000);
+            await saveQuotationBtn.click({ force: true });
+            spinnerAppeared = await vinPage.locator(".page-unload-div").waitFor({ state: "visible", timeout: 5000 }).then(() => true).catch(() => false);
+            console.log(`  Spinner after retry: ${spinnerAppeared ? "YES — save started" : "NO — save button unresponsive"}`);
+          }
+          if (spinnerAppeared) {
+            await vinPage.locator(".page-unload-div").waitFor({ state: "hidden", timeout: 20000 }).catch(() => {});
+          }
           await vinPage.waitForTimeout(2000);
           console.log(`  Save Quotation done, URL: ${vinPage.url()}`);
 
