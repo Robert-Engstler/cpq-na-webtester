@@ -60,6 +60,21 @@ on:
         required: false
         type: string
         default: ""
+      pdf_only:
+        description: "PDF-only retry — skip full flow, download PDFs for pdf_order_url"
+        required: false
+        type: string
+        default: "false"
+      pdf_order_url:
+        description: "Full order page URL for PDF-only retry (e.g. https://.../asorder/9901360025)"
+        required: false
+        type: string
+        default: ""
+      pdf_vin:
+        description: "VIN label for PDF-only retry step names"
+        required: false
+        type: string
+        default: ""
 
 jobs:
   run-test:
@@ -106,6 +121,9 @@ jobs:
           ANNUAL_DURATION:       ${{ inputs.annual_duration }}
           SVC_PRESET:            ${{ inputs.svc_preset }}
           SVC_OPTIONS:           ${{ inputs.svc_options }}
+          PDF_ONLY:              ${{ inputs.pdf_only }}
+          PDF_ORDER_URL:         ${{ inputs.pdf_order_url }}
+          PDF_VIN:               ${{ inputs.pdf_vin }}
           WEBHOOK_URL:           ${{ secrets.WEBHOOK_URL }}
           WEBHOOK_SECRET:        ${{ secrets.WEBHOOK_SECRET }}
           BLOB_READ_WRITE_TOKEN: ${{ secrets.BLOB_READ_WRITE_TOKEN }}

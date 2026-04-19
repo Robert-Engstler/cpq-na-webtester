@@ -56,6 +56,11 @@ const SVC_PRESET      = process.env.SVC_PRESET ?? "Minimum";
 const WEBHOOK_URL     = process.env.WEBHOOK_URL;
 const WEBHOOK_SECRET  = process.env.WEBHOOK_SECRET;
 
+// PDF-only retry mode — re-downloads PDFs for a specific order URL without running the full flow
+const PDF_ONLY      = process.env.PDF_ONLY === "true";
+const PDF_ORDER_URL = process.env.PDF_ORDER_URL ?? "";
+const PDF_VIN       = process.env.PDF_VIN ?? (vinList[0] ?? "");
+
 // Resolve CPQ password from the JSON map (never passed as plain input to avoid log exposure)
 let CPQ_PASSWORD = "";
 try {
@@ -63,8 +68,12 @@ try {
   CPQ_PASSWORD = passwords[`${ENVIRONMENT}|${BRAND}|${COUNTRY}`] ?? "";
 } catch { /* ignore parse error */ }
 
-if (vinList.length === 0 || !CPQ_URL || !CPQ_USERNAME || !CPQ_PASSWORD) {
+if (!PDF_ONLY && (vinList.length === 0 || !CPQ_URL || !CPQ_USERNAME || !CPQ_PASSWORD)) {
   console.error("Missing required env vars (VINS, CPQ_URL, CPQ_USERNAME, CPQ_PASSWORDS)");
+  process.exit(1);
+}
+if (PDF_ONLY && (!CPQ_USERNAME || !CPQ_PASSWORD || !PDF_ORDER_URL)) {
+  console.error("PDF_ONLY mode requires CPQ_USERNAME, CPQ_PASSWORDS, PDF_ORDER_URL");
   process.exit(1);
 }
 if (!WEBHOOK_URL || !WEBHOOK_SECRET || !RUN_ID) {
@@ -131,8 +140,11 @@ async function fail(step, err, extra = {}) {
 
 // ── Webhook ───────────────────────────────────────────────────────────────────
 
+// In PDF-only mode individual steps are not streamed — they're sent as a batch in pdf_retry_complete.
+let _pdfOnlyMode = false;
+
 async function postStep(stepResult) {
-  if (!WEBHOOK_URL || !RUN_ID) return;
+  if (_pdfOnlyMode || !WEBHOOK_URL || !RUN_ID) return;
   try {
     await fetch(WEBHOOK_URL, {
       method: "POST",
@@ -1238,13 +1250,13 @@ async function run() {
           const dlFound = await allDlBtns.first().waitFor({ timeout: 20000 }).then(() => true).catch(() => false);
           if (!dlFound) {
             console.log(`  GC Order Details PDF button not found — skipping`);
-            await pass(`${prefix} Download Genuine Care Order Details PDF`, { page: vinPage, startTime: t0 });
+            await pass(`${prefix} Download Genuine Care Order Details PDF`, { page: vinPage, startTime: t0, pdfDownloaded: false });
           } else {
             const gcOrderPath = `gc-order-details-${VIN}.pdf`;
             const saved = await clickAndSavePdf(allDlBtns.nth(0), gcOrderPath, context);
             if (saved) allPdfPaths.push(saved);
             else console.log(`  GC Order Details PDF — no download or new tab`);
-            await pass(`${prefix} Download Genuine Care Order Details PDF`, { page: vinPage, startTime: t0 });
+            await pass(`${prefix} Download Genuine Care Order Details PDF`, { page: vinPage, startTime: t0, pdfDownloaded: !!saved });
           }
         } catch (err) {
           await fail(`${prefix} Download Genuine Care Order Details PDF`, err, { page: vinPage, startTime: t0 });
@@ -1260,13 +1272,13 @@ async function run() {
           const count = await allDlBtns.count();
           if (count < 2) {
             console.log(`  Maintenance Agreement PDF button not found (only ${count} download buttons) — skipping`);
-            await pass(`${prefix} Download Maintenance Agreement PDF`, { page: vinPage, startTime: t0 });
+            await pass(`${prefix} Download Maintenance Agreement PDF`, { page: vinPage, startTime: t0, pdfDownloaded: false });
           } else {
             const maintPath = `maintenance-agreement-${VIN}.pdf`;
             const saved = await clickAndSavePdf(allDlBtns.nth(1), maintPath, context);
             if (saved) allPdfPaths.push(saved);
             else console.log(`  Maintenance Agreement PDF — no download or new tab`);
-            await pass(`${prefix} Download Maintenance Agreement PDF`, { page: vinPage, startTime: t0 });
+            await pass(`${prefix} Download Maintenance Agreement PDF`, { page: vinPage, startTime: t0, pdfDownloaded: !!saved });
           }
         } catch (err) {
           await fail(`${prefix} Download Maintenance Agreement PDF`, err, { page: vinPage, startTime: t0 });
@@ -1314,7 +1326,106 @@ async function run() {
   }
 }
 
-run().catch(err => {
+// ── PDF-only retry mode ───────────────────────────────────────────────────────
+// Navigates directly to a known order URL, attempts PDF downloads, posts results
+// back via a pdf_retry_complete webhook (merges into existing result_json).
+
+async function runPdfOnly() {
+  _pdfOnlyMode = true;
+  console.log(`PDF-only retry: ${PDF_VIN} → ${PDF_ORDER_URL}`);
+
+  const headless = process.env.HEADLESS !== "false";
+  const channel  = !headless && process.platform === "win32" ? "msedge" : undefined;
+  const browser  = await chromium.launch({ headless, channel });
+  const context  = await browser.newContext({ acceptDownloads: true });
+  await context.route(/trustarc|truste\.com|consent\.js/i, route => route.abort());
+  const page = await context.newPage();
+
+  const prefix = `[${PDF_VIN}]`;
+  setStepCtx(PDF_VIN, "pdf-retry");
+  const pdfPaths = [];
+
+  try {
+    await page.goto(PDF_ORDER_URL, { waitUntil: "domcontentloaded", timeout: 60000 });
+    await loginIfNeeded(page);
+    await dismissConsentBanner(page);
+    await page.waitForTimeout(2000);
+
+    // ── GC Order Details PDF ─────────────────────────────────────────────────
+    let t0 = Date.now();
+    const allDlBtns = page.getByRole("button", { name: /t[eé]l[eé]charg[a-z]*|download/i });
+    const dlFound = await allDlBtns.first().waitFor({ timeout: 20000 }).then(() => true).catch(() => false);
+    if (!dlFound) {
+      console.log("  GC Order Details PDF button not found");
+      await pass(`${prefix} Download Genuine Care Order Details PDF`, { page, startTime: t0, pdfDownloaded: false });
+    } else {
+      const gcPath = `gc-order-details-${PDF_VIN}.pdf`;
+      const saved = await clickAndSavePdf(allDlBtns.nth(0), gcPath, context);
+      if (saved) pdfPaths.push(saved);
+      else console.log("  GC Order Details PDF — no download or new tab");
+      await pass(`${prefix} Download Genuine Care Order Details PDF`, { page, startTime: t0, pdfDownloaded: !!saved });
+    }
+
+    // ── Maintenance Agreement PDF ─────────────────────────────────────────────
+    t0 = Date.now();
+    const count = await allDlBtns.count();
+    if (count < 2) {
+      console.log("  Maintenance Agreement PDF button not found");
+      await pass(`${prefix} Download Maintenance Agreement PDF`, { page, startTime: t0, pdfDownloaded: false });
+    } else {
+      const maintPath = `maintenance-agreement-${PDF_VIN}.pdf`;
+      const saved = await clickAndSavePdf(allDlBtns.nth(1), maintPath, context);
+      if (saved) pdfPaths.push(saved);
+      else console.log("  Maintenance Agreement PDF — no download or new tab");
+      await pass(`${prefix} Download Maintenance Agreement PDF`, { page, startTime: t0, pdfDownloaded: !!saved });
+    }
+
+  } finally {
+    await browser.close();
+
+    // Zip and upload any downloaded PDFs
+    let pdfZipUrl = null;
+    const existing = pdfPaths.filter(p => existsSync(p));
+    if (existing.length > 0) {
+      try {
+        const zipPath = "pdfs-retry.zip";
+        if (process.platform === "win32") {
+          execSync(`tar -acf ${zipPath} ${existing.join(" ")}`);
+        } else {
+          execSync(`zip -j ${zipPath} ${existing.join(" ")}`);
+        }
+        pdfZipUrl = await uploadToBlob(zipPath, `${RUN_ID}/pdfs-retry.zip`);
+      } catch (err) {
+        console.error("Failed to zip/upload retry PDFs:", err);
+      }
+    }
+
+    // Post pdf_retry_complete — webhook merges these steps into existing result_json
+    if (WEBHOOK_URL) {
+      try {
+        const res = await fetch(WEBHOOK_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${WEBHOOK_SECRET}` },
+          body: JSON.stringify({
+            type: "pdf_retry_complete",
+            run_id: RUN_ID,
+            vin: PDF_VIN,
+            steps: results,
+            pdf_url: pdfZipUrl,
+          }),
+        });
+        if (!res.ok) console.error(`Webhook responded with ${res.status}`);
+        else console.log("PDF retry results posted");
+      } catch (err) {
+        console.error("Failed to post PDF retry results:", err);
+      }
+    } else {
+      console.log("PDF retry results (local):", results.map(r => `${r.passed ? "✓" : "✗"} ${r.step} pdfDownloaded=${r.pdfDownloaded}`));
+    }
+  }
+}
+
+(PDF_ONLY ? runPdfOnly() : run()).catch(err => {
   console.error("Unhandled error:", err);
   process.exit(1);
 });

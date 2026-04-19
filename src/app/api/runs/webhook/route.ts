@@ -46,6 +46,40 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "run_id is required" }, { status: 400 });
   }
 
+  // ── PDF retry complete — merge PDF step results into existing result_json ─────
+  if (body.type === "pdf_retry_complete") {
+    const { run_id, pdf_url } = body;
+    const vin = (body as Record<string, unknown>).vin as string | undefined;
+    const newSteps = ((body as Record<string, unknown>).steps as Record<string, unknown>[] | undefined) ?? [];
+
+    const { rows: runRows } = await sql`SELECT result_json, pdf_url FROM test_runs WHERE id = ${run_id}`;
+    if (runRows.length === 0) return NextResponse.json({ error: "Run not found" }, { status: 404 });
+
+    const existing = (runRows[0].result_json ?? []) as Record<string, unknown>[];
+
+    // Replace matching steps (same vin + same step name); append if not found
+    const merged = [...existing];
+    for (const ns of newSteps) {
+      const idx = merged.findIndex(s => s.vin === vin && s.step === ns.step);
+      if (idx >= 0) {
+        merged[idx] = ns;
+      } else {
+        merged.push(ns);
+      }
+    }
+
+    // Keep existing pdf_url if no new one was uploaded
+    const finalPdfUrl = pdf_url ?? runRows[0].pdf_url ?? null;
+
+    await sql`
+      UPDATE test_runs SET
+        result_json = ${JSON.stringify(merged)}::jsonb,
+        pdf_url     = ${finalPdfUrl}
+      WHERE id = ${run_id}
+    `;
+    return NextResponse.json({ ok: true });
+  }
+
   // ── Incremental step update ───────────────────────────────────────────────────
   if (body.type === "step" && body.step != null) {
     const { rows: existing } = await sql`SELECT status FROM test_runs WHERE id = ${body.run_id}`;

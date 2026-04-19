@@ -7,12 +7,15 @@ import { C, bodySize, STATUS_CONFIG, thStyle, thClass, tdTop } from "@/lib/desig
 type StepResult = {
   step: string;
   passed: boolean;
+  vin?: string;
+  gcOption?: string;
   hadManualSpec?: boolean;
   manualSpecs?: string[];
   configId?: string;
   configUrl?: string;
   orderId?: string;
   orderQueued?: boolean;
+  pdfDownloaded?: boolean;
   error?: string;
   url?: string;
   durationMs?: number;
@@ -215,6 +218,9 @@ export default function RunDetailPage({
   const [jsonOpen, setJsonOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [pdfRetryState, setPdfRetryState] = useState<Record<string, "idle" | "loading" | "dispatched" | "error">>({});
+  const [orderIdInput, setOrderIdInput] = useState<Record<string, string>>({});
+  const [orderIdSaving, setOrderIdSaving] = useState<Record<string, boolean>>({});
 
   function handleCopyClaudeCommand(runId: string) {
     const url = `${window.location.origin}/api/share/${runId}`;
@@ -255,6 +261,47 @@ export default function RunDetailPage({
       }
     };
   }, [run, fetchRun]);
+
+  async function handleRetryPdf(vin: string) {
+    setPdfRetryState(s => ({ ...s, [vin]: "loading" }));
+    try {
+      const res = await fetch(`/api/runs/${id}/retry-pdf`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ vin }),
+      });
+      if (!res.ok) {
+        const { error } = await res.json().catch(() => ({ error: "Request failed" }));
+        console.error("Retry PDF error:", error);
+        setPdfRetryState(s => ({ ...s, [vin]: "error" }));
+      } else {
+        setPdfRetryState(s => ({ ...s, [vin]: "dispatched" }));
+      }
+    } catch {
+      setPdfRetryState(s => ({ ...s, [vin]: "error" }));
+    }
+  }
+
+  async function handleConfirmOrderId(vin: string) {
+    const orderId = orderIdInput[vin]?.trim();
+    if (!orderId) return;
+    setOrderIdSaving(s => ({ ...s, [vin]: true }));
+    try {
+      // Save order ID
+      const patchRes = await fetch(`/api/runs/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ vin, orderId }),
+      });
+      if (!patchRes.ok) throw new Error("Failed to save order ID");
+      // Trigger PDF retry
+      await handleRetryPdf(vin);
+    } catch {
+      setPdfRetryState(s => ({ ...s, [vin]: "error" }));
+    } finally {
+      setOrderIdSaving(s => ({ ...s, [vin]: false }));
+    }
+  }
 
   return (
     <main
@@ -497,29 +544,112 @@ export default function RunDetailPage({
                               {step.error}
                             </p>
                           )}
-                          {step.orderQueued && step.url && (
-                            <div className="mt-1.5 flex items-center gap-2">
-                              <span className="text-xs" style={{ color: C.warning }}>
-                                Order queued — not confirmed after 3 attempts
-                              </span>
-                              <a
-                                href={step.url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center px-2 py-0.5 text-xs font-medium"
-                                style={{
-                                  background: "transparent",
-                                  color: C.warning,
-                                  border: `1px solid ${C.warning}`,
-                                  borderRadius: 2,
-                                  textDecoration: "none",
-                                  whiteSpace: "nowrap",
-                                }}
-                              >
-                                Open in CPQ &rarr;
-                              </a>
-                            </div>
-                          )}
+                          {step.orderQueued && step.url && step.vin && (() => {
+                            const vin = step.vin;
+                            const rs = pdfRetryState[vin] ?? "idle";
+                            return (
+                              <div className="mt-1.5 flex flex-col gap-1.5">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs" style={{ color: C.warning }}>
+                                    Order queued — not confirmed after 3 attempts
+                                  </span>
+                                  <a
+                                    href={step.url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center px-2 py-0.5 text-xs font-medium"
+                                    style={{
+                                      background: "transparent",
+                                      color: C.warning,
+                                      border: `1px solid ${C.warning}`,
+                                      borderRadius: 2,
+                                      textDecoration: "none",
+                                      whiteSpace: "nowrap",
+                                    }}
+                                  >
+                                    Open in CPQ &rarr;
+                                  </a>
+                                </div>
+                                {rs === "dispatched" ? (
+                                  <span className="text-xs" style={{ color: C.success }}>
+                                    PDF retry dispatched — check back in ~2 min
+                                  </span>
+                                ) : rs === "error" ? (
+                                  <span className="text-xs" style={{ color: C.danger }}>
+                                    PDF retry failed — check logs
+                                  </span>
+                                ) : (
+                                  <div className="flex items-center gap-1.5">
+                                    <input
+                                      type="text"
+                                      placeholder="Enter order ID (e.g. 9901360025)"
+                                      value={orderIdInput[vin] ?? ""}
+                                      onChange={e => setOrderIdInput(s => ({ ...s, [vin]: e.target.value }))}
+                                      className="text-xs px-2 py-0.5"
+                                      style={{
+                                        background: "#1a1a1a",
+                                        border: `1px solid ${C.border}`,
+                                        color: C.primary,
+                                        borderRadius: 2,
+                                        width: 220,
+                                        fontFamily: "inherit",
+                                      }}
+                                    />
+                                    <button
+                                      onClick={() => handleConfirmOrderId(vin)}
+                                      disabled={orderIdSaving[vin] || rs === "loading" || !(orderIdInput[vin]?.trim())}
+                                      className="px-2 py-0.5 text-xs font-medium"
+                                      style={{
+                                        background: "transparent",
+                                        color: C.accent,
+                                        border: `1px solid ${C.accent}`,
+                                        borderRadius: 2,
+                                        cursor: "pointer",
+                                        opacity: (orderIdSaving[vin] || rs === "loading") ? 0.5 : 1,
+                                        fontFamily: "inherit",
+                                      }}
+                                    >
+                                      {(orderIdSaving[vin] || rs === "loading") ? "Saving…" : "Confirm & Download PDFs"}
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })()}
+                          {step.pdfDownloaded === false && !step.orderQueued && step.vin && (() => {
+                            const vin = step.vin;
+                            const rs = pdfRetryState[vin] ?? "idle";
+                            return (
+                              <div className="mt-1.5 flex items-center gap-2">
+                                {rs === "dispatched" ? (
+                                  <span className="text-xs" style={{ color: C.success }}>
+                                    PDF retry dispatched — check back in ~2 min
+                                  </span>
+                                ) : rs === "error" ? (
+                                  <span className="text-xs" style={{ color: C.danger }}>
+                                    PDF retry failed — check logs
+                                  </span>
+                                ) : (
+                                  <button
+                                    onClick={() => handleRetryPdf(vin)}
+                                    disabled={rs === "loading"}
+                                    className="px-2 py-0.5 text-xs font-medium"
+                                    style={{
+                                      background: "transparent",
+                                      color: C.secondary,
+                                      border: `1px solid ${C.border}`,
+                                      borderRadius: 2,
+                                      cursor: "pointer",
+                                      opacity: rs === "loading" ? 0.5 : 1,
+                                      fontFamily: "inherit",
+                                    }}
+                                  >
+                                    {rs === "loading" ? "Dispatching…" : "Retry PDF Download"}
+                                  </button>
+                                )}
+                              </div>
+                            );
+                          })()}
                           {step.screenshotUrl && (
                             <a
                               href={step.screenshotUrl}
