@@ -53,6 +53,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "title and root_cause are required" }, { status: 400 });
   }
   try {
+    const isResolved = (body.status ?? "resolved") === "resolved";
     const { rows } = await sql`
       INSERT INTO lessons_learned (title, step_name, brand, country, gc_option, root_cause, fix_applied, status, run_id, resolved_at)
       VALUES (
@@ -65,7 +66,7 @@ export async function POST(request: NextRequest) {
         ${body.fix_applied?.trim() || null},
         ${body.status || "resolved"},
         ${body.run_id || null},
-        ${(body.status ?? "resolved") === "resolved" ? sql`NOW()` : null}
+        ${isResolved ? new Date().toISOString() : null}
       )
       RETURNING *
     `;

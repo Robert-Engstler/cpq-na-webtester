@@ -175,7 +175,7 @@ export default function AnalysisPage() {
           lessons={lessons}
           showAdd={showAddLesson}
           form={lessonForm}
-          onFormChange={f => setLessonForm(f)}
+          onFormChange={f => setLessonForm(f as typeof lessonForm)}
           onToggleAdd={() => setShowAddLesson(v => !v)}
           onSubmit={handleAddLesson}
           onDelete={deleteLesson}
