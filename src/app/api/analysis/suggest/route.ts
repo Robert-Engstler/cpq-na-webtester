@@ -32,8 +32,9 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ suggestion: text, generatedAt: new Date().toISOString() });
   } catch (err) {
-    console.error("[POST /api/analysis/suggest]", err);
-    return NextResponse.json({ error: "Claude API call failed" }, { status: 500 });
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[POST /api/analysis/suggest]", msg);
+    return NextResponse.json({ error: `Claude API call failed: ${msg}` }, { status: 500 });
   }
 }
 
