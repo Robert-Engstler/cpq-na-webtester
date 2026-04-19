@@ -139,15 +139,19 @@ export default function AnalysisPage() {
 
       {/* Suggestion box */}
       {suggestion && (
-        <div style={{ margin: "16px 28px", padding: 16, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 6, fontSize: 12, lineHeight: 1.7, whiteSpace: "pre-wrap" }}>
-          <div style={{ fontSize: 10, color: C.muted, marginBottom: 8, textTransform: "uppercase", letterSpacing: 1 }}>AI Analysis & Recommendations</div>
-          {suggestion}
-          <button
-            onClick={() => setSuggestion(null)}
-            style={{ marginTop: 12, fontFamily: mono, fontSize: 11, padding: "4px 10px", background: "transparent", border: `1px solid ${C.border}`, color: C.muted, borderRadius: 4, cursor: "pointer" }}
-          >
-            Dismiss
-          </button>
+        <div style={{ margin: "16px 28px", background: C.surface, border: `1px solid ${C.border}`, borderRadius: 6, display: "flex", flexDirection: "column", maxHeight: "45vh" }}>
+          <div style={{ padding: "12px 16px 8px", fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: 1, flexShrink: 0 }}>AI Analysis & Recommendations</div>
+          <div style={{ padding: "0 16px", overflowY: "auto", flex: 1, fontSize: 12, lineHeight: 1.7, whiteSpace: "pre-wrap" }}>
+            {suggestion}
+          </div>
+          <div style={{ padding: "10px 16px", flexShrink: 0, borderTop: `1px solid ${C.border}` }}>
+            <button
+              onClick={() => setSuggestion(null)}
+              style={{ fontFamily: mono, fontSize: 11, padding: "4px 10px", background: "transparent", border: `1px solid ${C.border}`, color: C.muted, borderRadius: 4, cursor: "pointer" }}
+            >
+              Dismiss
+            </button>
+          </div>
         </div>
       )}
 
