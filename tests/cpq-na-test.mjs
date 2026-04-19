@@ -811,7 +811,7 @@ async function run() {
           const dialogVisible = await dialog.waitFor({ state: "visible", timeout: 3000 }).then(() => true).catch(() => false);
           if (dialogVisible) {
             console.log(`  Completing config save modal (CA)`);
-            const saveInDialog = dialog.getByRole("button", { name: /^sauvegarder$/i });
+            const saveInDialog = dialog.getByRole("button", { name: /^(?:sauvegarder|save)$/i });
             await saveInDialog.click({ timeout: 5000 }).catch(e => console.log(`  Save modal click error: ${e.message}`));
             await vinPage.waitForTimeout(1500);
           }
@@ -913,8 +913,8 @@ async function run() {
           // CA French: clicking "Créer un devis" may trigger an "unsaved changes" modal
           // ("CONFIGURATION NON SAUVEGARDÉE") — click "SAUVEGARDER" to save and proceed.
           await vinPage.waitForTimeout(1500);
-          const unsavedModal = vinPage.getByRole("button", { name: /^sauvegarder$/i })
-            .or(vinPage.locator("button").filter({ hasText: /^sauvegarder$/i })).first();
+          const unsavedModal = vinPage.getByRole("button", { name: /^(?:sauvegarder|save)$/i })
+            .or(vinPage.locator("button").filter({ hasText: /^(?:sauvegarder|save)$/i })).first();
           const modalAppeared = await unsavedModal.waitFor({ state: "visible", timeout: 4000 }).then(() => true).catch(() => false);
           if (modalAppeared) {
             console.log(`  Unsaved config modal — clicking Sauvegarder`);
