@@ -26,6 +26,9 @@ export function Nav({ environment }: { environment?: string }) {
       style={{
         background: C.surface,
         borderBottom: `1px solid ${C.border}`,
+        position: "sticky",
+        top: 0,
+        zIndex: 50,
       }}
     >
       <span className="font-semibold" style={{ color: C.primary }}>

@@ -59,7 +59,19 @@ CREATE TABLE IF NOT EXISTS test_runs (
 
 -- Auto-delete runs older than 30 days (handled in application layer)
 
--- Lessons learned: human-curated registry of failure patterns and their fixes
+-- Analysis snapshots: saved AI analysis results with cross-check tracking
+CREATE TABLE IF NOT EXISTS analysis_snapshots (
+  id                   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  created_at           TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  run_count            INTEGER NOT NULL,
+  overall_failure_rate DECIMAL(5,4) NOT NULL,
+  failing_steps        JSONB NOT NULL,   -- [{stepName, failureRate, failures, totalRuns}]
+  suggestion_text      TEXT NOT NULL,
+  status               TEXT NOT NULL DEFAULT 'pending',  -- pending | implementing | verified | dismissed
+  notes                TEXT
+);
+
+-- Lessons learned: human-curated registry of failure patterns and their fixes (legacy)
 CREATE TABLE IF NOT EXISTS lessons_learned (
   id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   title        TEXT NOT NULL,
