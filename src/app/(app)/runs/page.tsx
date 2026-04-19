@@ -189,6 +189,7 @@ export default function RunsPage() {
   const [error, setError] = useState("");
   const [page, setPage] = useState(1);
   const [stoppingId, setStoppingId] = useState<string | null>(null);
+  const [pdfRetry, setPdfRetry] = useState<Record<string, "idle" | "loading" | "dispatched" | "error">>({});
   const perPage = 5;
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -200,6 +201,21 @@ export default function RunsPage() {
   }, []);
 
   useEffect(() => { fetchRuns().finally(() => setLoading(false)); }, [fetchRuns]);
+
+  async function handleRetryPdf(runId: string, vin: string) {
+    const key = `${runId}:${vin}`;
+    setPdfRetry(s => ({ ...s, [key]: "loading" }));
+    try {
+      const res = await fetch(`/api/runs/${runId}/retry-pdf`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ vin }),
+      });
+      setPdfRetry(s => ({ ...s, [key]: res.ok ? "dispatched" : "error" }));
+    } catch {
+      setPdfRetry(s => ({ ...s, [key]: "error" }));
+    }
+  }
 
   async function handleStop(id: string) {
     setStoppingId(id);
@@ -357,10 +373,32 @@ export default function RunsPage() {
                           return <span key={v} style={{ color: C.muted, fontSize: 10, fontFamily: mono }}>config test only</span>;
                         }
                         const pdfMissing = orderPdfMissing(v, run.result_json);
+                        if (!pdfMissing) {
+                          return <span key={v} style={{ color: C.success, fontFamily: mono, fontSize: 11 }}>{orderId}</span>;
+                        }
+                        const key = `${run.id}:${v}`;
+                        const rs = pdfRetry[key] ?? "idle";
                         return (
-                          <span key={v} style={{ color: pdfMissing ? C.warning : C.success, fontFamily: mono, fontSize: 11 }}
-                            title={pdfMissing ? "Order placed — PDFs not downloaded" : undefined}>
-                            {orderId}
+                          <span key={v} style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                            <span style={{ color: C.warning, fontFamily: mono, fontSize: 11 }}
+                              title="Order placed — PDFs not downloaded">{orderId}</span>
+                            {rs === "dispatched" ? (
+                              <span style={{ color: C.success, fontSize: 10 }}>↻ sent</span>
+                            ) : rs === "error" ? (
+                              <span style={{ color: C.danger, fontSize: 10 }}>failed</span>
+                            ) : (
+                              <button
+                                onClick={() => handleRetryPdf(run.id, v)}
+                                disabled={rs === "loading"}
+                                title="Retry PDF download"
+                                style={{
+                                  background: "none", border: `1px solid ${C.warning}`, color: C.warning,
+                                  borderRadius: 2, padding: "0px 5px", fontSize: 10, cursor: "pointer",
+                                  fontFamily: mono, opacity: rs === "loading" ? 0.5 : 1, lineHeight: "16px",
+                                }}>
+                                {rs === "loading" ? "…" : "↻"}
+                              </button>
+                            )}
                           </span>
                         );
                       })}
