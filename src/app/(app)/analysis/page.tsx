@@ -394,13 +394,13 @@ function StepDetail({ step }: { step: StepStat }) {
   );
 }
 
-const ACTION_STATUS_CYCLE: Record<ActionItem["status"], ActionItem["status"]> = {
+const ACTION_CYCLE: Record<ActionItem["status"], ActionItem["status"]> = {
   pending: "done",
   done: "dismissed",
   dismissed: "pending",
 };
 
-const ACTION_STATUS_STYLE: Record<ActionItem["status"], { icon: string; color: string }> = {
+const ACTION_ICON: Record<ActionItem["status"], { icon: string; color: string }> = {
   pending:   { icon: "○", color: C.muted },
   done:      { icon: "✓", color: C.success },
   dismissed: { icon: "—", color: C.muted },
@@ -419,7 +419,7 @@ function FindingsTab({
   onDelete: (id: string) => Promise<void>;
   onExtractActions: (id: string) => Promise<void>;
 }) {
-  const [expanded, setExpanded]     = useState<string | null>(null);
+  const [expanded, setExpanded]         = useState<string | null>(null);
   const [editingNotes, setEditingNotes] = useState<Record<string, string>>({});
   const [savingNotes, setSavingNotes]   = useState<Record<string, boolean>>({});
   const [extracting, setExtracting]     = useState<Record<string, boolean>>({});
@@ -427,9 +427,6 @@ function FindingsTab({
   const currentlyFailing = new Set(
     currentAnalysis?.steps.filter(s => s.failures > 0).map(s => s.stepName) ?? []
   );
-
-  const active    = snapshots.filter(s => s.status !== "dismissed");
-  const dismissed = snapshots.filter(s => s.status === "dismissed");
 
   if (snapshots.length === 0) {
     return (
@@ -453,206 +450,271 @@ function FindingsTab({
 
   function toggleActionItem(snap: Snapshot, itemId: string) {
     const items = (snap.action_items ?? []).map(a =>
-      a.id === itemId ? { ...a, status: ACTION_STATUS_CYCLE[a.status] } : a
+      a.id === itemId ? { ...a, status: ACTION_CYCLE[a.status] } : a
     );
     onUpdate(snap.id, { action_items: items });
   }
 
-  function renderSnapshot(snap: Snapshot) {
-    const isExpanded = expanded === snap.id;
-    const cfg = SNAP_STATUS[snap.status];
-    const noteVal = editingNotes[snap.id] !== undefined ? editingNotes[snap.id] : (snap.notes ?? "");
+  const th: React.CSSProperties = {
+    padding: "8px 12px", textAlign: "left", fontSize: 10,
+    color: C.muted, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.8,
+    whiteSpace: "nowrap",
+  };
 
-    const stillFailing = snap.failing_steps.filter(fs => currentlyFailing.has(fs.stepName));
-    const nowPassing   = snap.failing_steps.filter(fs => !currentlyFailing.has(fs.stepName));
+  const active    = snapshots.filter(s => s.status !== "dismissed");
+  const dismissed = snapshots.filter(s => s.status === "dismissed");
 
-    const items = snap.action_items ?? [];
-    const doneCount    = items.filter(a => a.status === "done").length;
-    const pendingCount = items.filter(a => a.status === "pending").length;
-
-    const borderColor =
-      snap.status === "verified" && stillFailing.length > 0 ? C.danger :
-      snap.status === "implementing" ? C.warning :
-      C.border;
-
+  function renderGroup(group: Snapshot[], label?: string) {
     return (
-      <div key={snap.id} style={{ background: C.surface, border: `1px solid ${borderColor}`, borderRadius: 6, overflow: "hidden" }}>
-        {/* Collapsed header */}
-        <div
-          style={{ padding: "12px 16px", display: "flex", alignItems: "center", gap: 12, cursor: "pointer" }}
-          onClick={() => setExpanded(isExpanded ? null : snap.id)}
-        >
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-              <span style={{ fontSize: 12, color: C.primary, fontWeight: 600 }}>
-                {new Date(snap.created_at).toLocaleString()}
-              </span>
-              <span style={{ fontSize: 10, color: C.muted }}>
-                {snap.run_count} runs · {pct(snap.overall_failure_rate)} failure rate
-              </span>
-              <span style={{ fontSize: 10, padding: "2px 6px", borderRadius: 3, background: "rgba(255,255,255,0.05)", color: cfg.color }}>
-                {cfg.label}
-              </span>
-              {items.length > 0 && (
-                <span style={{ fontSize: 10, padding: "2px 6px", borderRadius: 3, background: doneCount === items.length ? "rgba(34,197,94,0.1)" : "rgba(255,255,255,0.05)", color: doneCount === items.length ? C.success : C.secondary }}>
-                  {doneCount}/{items.length} actions done
-                </span>
-              )}
-              {snap.status === "verified" && stillFailing.length > 0 && (
-                <span style={{ fontSize: 10, padding: "2px 6px", borderRadius: 3, background: "rgba(239,68,68,0.1)", color: C.danger }}>
-                  ⚠ {stillFailing.length} step{stillFailing.length !== 1 ? "s" : ""} still failing
-                </span>
-              )}
-              {snap.status === "implementing" && nowPassing.length > 0 && (
-                <span style={{ fontSize: 10, padding: "2px 6px", borderRadius: 3, background: "rgba(34,197,94,0.1)", color: C.success }}>
-                  ✓ {nowPassing.length} step{nowPassing.length !== 1 ? "s" : ""} resolved
-                </span>
-              )}
-            </div>
-            <div style={{ marginTop: 4, fontSize: 11, color: C.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-              {snap.failing_steps.map(fs => fs.stepName).join(" · ") || "No failing steps"}
-            </div>
-          </div>
-          <span style={{ color: C.muted, fontSize: 11, flexShrink: 0 }}>{isExpanded ? "▲" : "▼"}</span>
-        </div>
+      <>
+        {label && (
+          <tr>
+            <td colSpan={8} style={{ padding: "20px 12px 8px", fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: 1 }}>
+              {label}
+            </td>
+          </tr>
+        )}
+        {group.map(snap => {
+          const isExpanded = expanded === snap.id;
+          const cfg        = SNAP_STATUS[snap.status];
+          const items      = snap.action_items ?? [];
+          const doneCount  = items.filter(a => a.status === "done").length;
+          const pendingCount = items.filter(a => a.status === "pending").length;
+          const stillFailing = snap.failing_steps.filter(fs => currentlyFailing.has(fs.stepName));
+          const nowPassing   = snap.failing_steps.filter(fs => !currentlyFailing.has(fs.stepName));
+          const noteVal = editingNotes[snap.id] !== undefined ? editingNotes[snap.id] : (snap.notes ?? "");
 
-        {/* Expanded body */}
-        {isExpanded && (
-          <div style={{ borderTop: `1px solid ${C.border}` }}>
-            {/* Step cross-check chips */}
-            <div style={{ padding: "10px 16px", display: "flex", flexWrap: "wrap", gap: 6 }}>
-              {snap.failing_steps.map(fs => {
-                const stillFails = currentlyFailing.has(fs.stepName);
-                return (
-                  <span key={fs.stepName} style={{
-                    fontSize: 10, padding: "3px 8px", borderRadius: 3,
-                    background: stillFails ? "rgba(239,68,68,0.1)" : "rgba(34,197,94,0.1)",
-                    color: stillFails ? C.danger : C.success,
-                  }}>
-                    {stillFails ? "✗" : "✓"} {fs.stepName} ({pct(fs.failureRate)} then)
-                  </span>
-                );
-              })}
-            </div>
+          const rowBg =
+            snap.status === "verified" && stillFailing.length > 0 ? "rgba(239,68,68,0.04)" :
+            snap.status === "implementing" ? "rgba(245,158,11,0.04)" : "";
 
-            {/* Action items checklist */}
-            <div style={{ margin: "0 16px 12px", background: C.surfaceAlt, borderRadius: 4, overflow: "hidden" }}>
-              <div style={{ padding: "8px 12px", display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: items.length > 0 ? `1px solid ${C.border}` : "none" }}>
-                <span style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: 0.8 }}>
-                  Action Items{items.length > 0 ? ` — ${doneCount}/${items.length} done · ${pendingCount} pending` : ""}
-                </span>
-                <button
-                  onClick={() => triggerExtract(snap.id)}
-                  disabled={extracting[snap.id]}
-                  style={{ fontFamily: mono, fontSize: 10, padding: "2px 8px", background: "transparent", border: `1px solid ${C.border}`, color: C.muted, borderRadius: 3, cursor: "pointer" }}
-                >
-                  {extracting[snap.id] ? "Extracting…" : items.length > 0 ? "Re-extract" : "Extract Actions"}
-                </button>
-              </div>
-              {items.length > 0 && (
-                <div style={{ padding: "4px 0" }}>
-                  {items.map(item => {
-                    const s = ACTION_STATUS_STYLE[item.status];
-                    return (
-                      <div
-                        key={item.id}
-                        onClick={() => toggleActionItem(snap, item.id)}
-                        style={{
-                          padding: "7px 12px", display: "flex", gap: 10, alignItems: "flex-start",
-                          cursor: "pointer", opacity: item.status === "dismissed" ? 0.45 : 1,
-                        }}
-                        onMouseEnter={e => (e.currentTarget.style.background = C.surfaceHi)}
-                        onMouseLeave={e => (e.currentTarget.style.background = "")}
-                      >
-                        <span style={{ color: s.color, fontWeight: 700, flexShrink: 0, fontSize: 13, lineHeight: "17px" }}>{s.icon}</span>
-                        <span style={{
-                          fontSize: 11, lineHeight: 1.5, color: item.status === "done" ? C.secondary : C.primary,
-                          textDecoration: item.status === "dismissed" ? "line-through" : "none",
+          return (
+            <>
+              {/* ── Main finding row ── */}
+              <tr
+                key={snap.id}
+                style={{ borderBottom: isExpanded ? "none" : `1px solid ${C.border}`, background: rowBg, cursor: "pointer" }}
+                onClick={() => setExpanded(isExpanded ? null : snap.id)}
+                onMouseEnter={e => { if (!isExpanded) e.currentTarget.style.background = C.surfaceAlt; }}
+                onMouseLeave={e => { if (!isExpanded) e.currentTarget.style.background = rowBg; }}
+              >
+                {/* Date */}
+                <td style={{ padding: "10px 12px", whiteSpace: "nowrap" }}>
+                  <div style={{ fontSize: 12, color: C.primary, fontWeight: 600 }}>
+                    {new Date(snap.created_at).toLocaleDateString()}
+                  </div>
+                  <div style={{ fontSize: 10, color: C.muted }}>
+                    {new Date(snap.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                  </div>
+                </td>
+
+                {/* Context */}
+                <td style={{ padding: "10px 12px", whiteSpace: "nowrap" }}>
+                  <div style={{ fontSize: 11, color: C.secondary }}>{snap.run_count} runs</div>
+                  <div style={{ fontSize: 11, color: failureColor(snap.overall_failure_rate) }}>
+                    {pct(snap.overall_failure_rate)} fail rate
+                  </div>
+                </td>
+
+                {/* Steps covered */}
+                <td style={{ padding: "10px 12px" }}>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+                    {snap.failing_steps.map(fs => {
+                      const stillFails = currentlyFailing.has(fs.stepName);
+                      return (
+                        <span key={fs.stepName} style={{
+                          fontSize: 9, padding: "2px 6px", borderRadius: 3,
+                          background: stillFails ? "rgba(239,68,68,0.12)" : "rgba(34,197,94,0.1)",
+                          color: stillFails ? C.danger : C.success, whiteSpace: "nowrap",
                         }}>
-                          {item.id}. {item.text}
+                          {stillFails ? "✗" : "✓"} {fs.stepName}
+                        </span>
+                      );
+                    })}
+                  </div>
+                </td>
+
+                {/* Status */}
+                <td style={{ padding: "10px 12px", whiteSpace: "nowrap" }} onClick={e => e.stopPropagation()}>
+                  <select
+                    value={snap.status}
+                    onChange={e => onUpdate(snap.id, { status: e.target.value })}
+                    style={{ fontFamily: mono, fontSize: 11, background: C.inputBg, border: `1px solid ${C.inputBdr}`, color: cfg.color, borderRadius: 4, padding: "3px 6px" }}
+                  >
+                    <option value="pending">Pending</option>
+                    <option value="implementing">Implementing</option>
+                    <option value="verified">Verified</option>
+                    <option value="dismissed">Dismissed</option>
+                  </select>
+                </td>
+
+                {/* Action progress */}
+                <td style={{ padding: "10px 12px", whiteSpace: "nowrap" }}>
+                  {items.length === 0 ? (
+                    <span style={{ fontSize: 11, color: C.muted }}>—</span>
+                  ) : (
+                    <>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}>
+                        <div style={{ width: 56, height: 4, background: C.surfaceHi, borderRadius: 2, overflow: "hidden" }}>
+                          <div style={{ width: `${(doneCount / items.length) * 100}%`, height: "100%", background: doneCount === items.length ? C.success : C.accent, borderRadius: 2 }} />
+                        </div>
+                        <span style={{ fontSize: 11, color: doneCount === items.length ? C.success : C.secondary }}>
+                          {doneCount}/{items.length}
                         </span>
                       </div>
-                    );
-                  })}
-                </div>
+                      <div style={{ fontSize: 10, color: C.muted }}>{pendingCount} pending</div>
+                    </>
+                  )}
+                </td>
+
+                {/* Cross-check alert */}
+                <td style={{ padding: "10px 12px", whiteSpace: "nowrap" }}>
+                  {snap.status === "verified" && stillFailing.length > 0 && (
+                    <span style={{ fontSize: 10, color: C.danger }}>⚠ {stillFailing.length} still failing</span>
+                  )}
+                  {snap.status === "implementing" && nowPassing.length > 0 && (
+                    <span style={{ fontSize: 10, color: C.success }}>✓ {nowPassing.length} resolved</span>
+                  )}
+                  {!(snap.status === "verified" && stillFailing.length > 0) && !(snap.status === "implementing" && nowPassing.length > 0) && (
+                    <span style={{ fontSize: 11, color: C.muted }}>—</span>
+                  )}
+                </td>
+
+                {/* Controls */}
+                <td style={{ padding: "10px 12px", whiteSpace: "nowrap" }} onClick={e => e.stopPropagation()}>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <button
+                      onClick={() => triggerExtract(snap.id)}
+                      disabled={extracting[snap.id]}
+                      title={items.length > 0 ? "Re-extract action items" : "Extract action items"}
+                      style={{ fontFamily: mono, fontSize: 10, padding: "2px 7px", background: "transparent", border: `1px solid ${C.border}`, color: C.muted, borderRadius: 3, cursor: "pointer" }}
+                    >
+                      {extracting[snap.id] ? "…" : items.length > 0 ? "⟳" : "Extract"}
+                    </button>
+                    <button
+                      onClick={() => onDelete(snap.id)}
+                      title="Delete finding"
+                      style={{ fontFamily: mono, fontSize: 10, padding: "2px 7px", background: "transparent", border: `1px solid ${C.border}`, color: C.muted, borderRadius: 3, cursor: "pointer" }}
+                    >
+                      ✕
+                    </button>
+                  </div>
+                </td>
+
+                {/* Expand toggle */}
+                <td style={{ padding: "10px 12px", color: C.muted, fontSize: 11 }}>
+                  {isExpanded ? "▲" : "▼"}
+                </td>
+              </tr>
+
+              {/* ── Expanded: action items table + notes ── */}
+              {isExpanded && (
+                <tr key={`${snap.id}-detail`} style={{ borderBottom: `1px solid ${C.border}` }}>
+                  <td colSpan={8} style={{ padding: 0, background: C.surfaceAlt }}>
+
+                    {/* Action items table */}
+                    {items.length > 0 ? (
+                      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                        <thead>
+                          <tr style={{ borderBottom: `1px solid ${C.border}` }}>
+                            <th style={{ ...th, width: 36 }}></th>
+                            <th style={{ ...th, width: 28 }}>#</th>
+                            <th style={{ ...th }}>Action</th>
+                            <th style={{ ...th, width: 90 }}>Status</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {items.map(item => {
+                            const s = ACTION_ICON[item.status];
+                            return (
+                              <tr
+                                key={item.id}
+                                onClick={() => toggleActionItem(snap, item.id)}
+                                style={{ borderBottom: `1px solid ${C.border}`, cursor: "pointer", opacity: item.status === "dismissed" ? 0.45 : 1 }}
+                                onMouseEnter={e => (e.currentTarget.style.background = C.surfaceHi)}
+                                onMouseLeave={e => (e.currentTarget.style.background = "")}
+                              >
+                                <td style={{ padding: "9px 12px", textAlign: "center" }}>
+                                  <span style={{ fontSize: 14, fontWeight: 700, color: s.color }}>{s.icon}</span>
+                                </td>
+                                <td style={{ padding: "9px 4px", color: C.muted, fontSize: 11 }}>{item.id}.</td>
+                                <td style={{ padding: "9px 12px 9px 4px", color: item.status === "done" ? C.secondary : C.primary, lineHeight: 1.5, textDecoration: item.status === "dismissed" ? "line-through" : "none" }}>
+                                  {item.text}
+                                </td>
+                                <td style={{ padding: "9px 12px", whiteSpace: "nowrap" }}>
+                                  <span style={{ fontSize: 10, color: s.color }}>{item.status}</span>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    ) : (
+                      <div style={{ padding: "12px 16px", fontSize: 11, color: C.muted }}>
+                        No action items extracted yet. Click "Extract" to generate them.
+                      </div>
+                    )}
+
+                    {/* Notes + full suggestion */}
+                    <div style={{ padding: "12px 16px", borderTop: `1px solid ${C.border}`, display: "flex", gap: 12, alignItems: "flex-end", flexWrap: "wrap" }}>
+                      <div style={{ flex: 1, minWidth: 240 }}>
+                        <div style={{ fontSize: 10, color: C.muted, marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>Notes</div>
+                        <div style={{ display: "flex", gap: 6 }}>
+                          <input
+                            value={noteVal}
+                            onChange={e => setEditingNotes(n => ({ ...n, [snap.id]: e.target.value }))}
+                            placeholder="Implementation notes…"
+                            style={{ fontFamily: mono, fontSize: 11, background: C.inputBg, border: `1px solid ${C.inputBdr}`, color: C.primary, borderRadius: 4, padding: "4px 8px", flex: 1 }}
+                          />
+                          <button
+                            onClick={() => saveNotes(snap.id)}
+                            disabled={savingNotes[snap.id]}
+                            style={{ fontFamily: mono, fontSize: 11, padding: "4px 10px", background: C.accent, border: "none", color: "#fff", borderRadius: 4, cursor: "pointer" }}
+                          >
+                            {savingNotes[snap.id] ? "…" : "Save"}
+                          </button>
+                        </div>
+                      </div>
+                      <details>
+                        <summary style={{ fontSize: 10, color: C.muted, cursor: "pointer", userSelect: "none", textTransform: "uppercase", letterSpacing: 0.8 }}>
+                          Full AI suggestion
+                        </summary>
+                        <div style={{ marginTop: 8, background: C.surface, borderRadius: 4, padding: "10px 12px", maxHeight: "22vh", overflowY: "auto", fontSize: 11, lineHeight: 1.7, whiteSpace: "pre-wrap", color: C.secondary, width: "min(600px, 60vw)" }}>
+                          {snap.suggestion_text}
+                        </div>
+                      </details>
+                    </div>
+
+                  </td>
+                </tr>
               )}
-            </div>
-
-            {/* Suggestion text (secondary) */}
-            <details style={{ margin: "0 16px 12px" }}>
-              <summary style={{ fontSize: 10, color: C.muted, cursor: "pointer", textTransform: "uppercase", letterSpacing: 0.8, userSelect: "none" }}>
-                Full AI suggestion
-              </summary>
-              <div style={{
-                marginTop: 6, background: C.surfaceAlt, borderRadius: 4,
-                padding: "10px 12px", maxHeight: "24vh", overflowY: "auto",
-                fontSize: 11, lineHeight: 1.7, whiteSpace: "pre-wrap", color: C.secondary,
-              }}>
-                {snap.suggestion_text}
-              </div>
-            </details>
-
-            {/* Controls */}
-            <div style={{ padding: "12px 16px", display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-end", borderTop: `1px solid ${C.border}` }}>
-              <div>
-                <div style={{ fontSize: 10, color: C.muted, marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>Status</div>
-                <select
-                  value={snap.status}
-                  onChange={e => onUpdate(snap.id, { status: e.target.value })}
-                  style={{ fontFamily: mono, fontSize: 11, background: C.inputBg, border: `1px solid ${C.inputBdr}`, color: C.primary, borderRadius: 4, padding: "4px 8px" }}
-                >
-                  <option value="pending">Pending</option>
-                  <option value="implementing">Implementing</option>
-                  <option value="verified">Verified</option>
-                  <option value="dismissed">Dismissed</option>
-                </select>
-              </div>
-
-              <div style={{ flex: 1, minWidth: 200 }}>
-                <div style={{ fontSize: 10, color: C.muted, marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>Notes</div>
-                <div style={{ display: "flex", gap: 6 }}>
-                  <input
-                    value={noteVal}
-                    onChange={e => setEditingNotes(n => ({ ...n, [snap.id]: e.target.value }))}
-                    placeholder="Add notes about implementation progress…"
-                    style={{ fontFamily: mono, fontSize: 11, background: C.inputBg, border: `1px solid ${C.inputBdr}`, color: C.primary, borderRadius: 4, padding: "4px 8px", flex: 1 }}
-                  />
-                  <button
-                    onClick={() => saveNotes(snap.id)}
-                    disabled={savingNotes[snap.id]}
-                    style={{ fontFamily: mono, fontSize: 11, padding: "4px 10px", background: C.accent, border: "none", color: "#fff", borderRadius: 4, cursor: "pointer" }}
-                  >
-                    {savingNotes[snap.id] ? "…" : "Save"}
-                  </button>
-                </div>
-              </div>
-
-              <button
-                onClick={() => onDelete(snap.id)}
-                style={{ fontFamily: mono, fontSize: 11, padding: "4px 10px", background: "transparent", border: `1px solid ${C.border}`, color: C.muted, borderRadius: 4, cursor: "pointer" }}
-              >
-                Delete
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
+            </>
+          );
+        })}
+      </>
     );
   }
 
   return (
-    <div style={{ padding: "20px 28px 40px" }}>
-      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        {active.map(snap => renderSnapshot(snap))}
-      </div>
-      {dismissed.length > 0 && (
-        <div style={{ marginTop: 20 }}>
-          <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>Dismissed</div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {dismissed.map(snap => renderSnapshot(snap))}
-          </div>
-        </div>
-      )}
+    <div style={{ padding: "0 28px 40px" }}>
+      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, marginTop: 20 }}>
+        <thead>
+          <tr style={{ borderBottom: `1px solid ${C.border}` }}>
+            <th style={th}>Date</th>
+            <th style={th}>Context</th>
+            <th style={th}>Steps covered</th>
+            <th style={th}>Status</th>
+            <th style={th}>Actions</th>
+            <th style={th}>Cross-check</th>
+            <th style={th}></th>
+            <th style={th}></th>
+          </tr>
+        </thead>
+        <tbody>
+          {renderGroup(active)}
+          {dismissed.length > 0 && renderGroup(dismissed, "Dismissed")}
+        </tbody>
+      </table>
     </div>
   );
 }
