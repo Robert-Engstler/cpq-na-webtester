@@ -13,6 +13,8 @@ type StepResult = {
   configId?: string;
   configUrl?: string;
   pdfDownloaded?: boolean;
+  orderQueued?: boolean;
+  url?: string;
   error?: string;
 };
 
@@ -152,6 +154,12 @@ function getConfig(vin: string, steps: StepResult[] | null): { id: string; url?:
   const first = vinSteps.find((s) => s.configId);
   if (first) return { id: first.configId!, url: first.configUrl };
   return null;
+}
+
+function orderQueuedUrl(vin: string, steps: StepResult[] | null): string | null {
+  if (!steps) return null;
+  const step = steps.find((s) => s.vin === vin && s.orderQueued === true);
+  return step?.url ?? null;
 }
 
 function orderPdfMissing(vin: string, steps: StepResult[] | null): boolean {
@@ -346,18 +354,37 @@ export default function RunsPage() {
                       {run.vins.map((v) => {
                         const cfg = getConfig(v, run.result_json);
                         if (!cfg) return <span key={v} style={{ color: C.muted }}>—</span>;
-                        // Only CONFIG... IDs are retrievable links; UUIDs are ephemeral session IDs
                         const isConfigId = /^CONFIG\d+$/i.test(cfg.id);
                         const configHref = isConfigId && cfg.url
                           ? (cfg.url.includes("?") ? cfg.url : `${cfg.url}?isRetrieved=true`)
                           : null;
-                        return configHref ? (
-                          <a key={v} href={configHref} target="_blank" rel="noopener noreferrer"
-                            style={{ color: C.accent, textDecoration: "underline", fontFamily: mono, fontSize: 11 }}>
-                            {cfg.id}
-                          </a>
-                        ) : (
-                          <span key={v} style={{ color: C.secondary, fontFamily: mono, fontSize: 11 }}>{cfg.id}</span>
+                        const queuedUrl = orderQueuedUrl(v, run.result_json);
+                        return (
+                          <span key={v} style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                            {configHref ? (
+                              <a href={configHref} target="_blank" rel="noopener noreferrer"
+                                title={queuedUrl ? "Order still queued — not confirmed" : undefined}
+                                style={{ color: queuedUrl ? C.warning : C.accent, textDecoration: "underline", fontFamily: mono, fontSize: 11 }}>
+                                {cfg.id}
+                              </a>
+                            ) : (
+                              <span title={queuedUrl ? "Order still queued — not confirmed" : undefined}
+                                style={{ color: queuedUrl ? C.warning : C.secondary, fontFamily: mono, fontSize: 11 }}>
+                                {cfg.id}
+                              </span>
+                            )}
+                            {queuedUrl && (
+                              <a href={queuedUrl} target="_blank" rel="noopener noreferrer"
+                                title="Open order in CPQ to place manually"
+                                style={{
+                                  background: "none", border: `1px solid ${C.warning}`, color: C.warning,
+                                  borderRadius: 2, padding: "0px 5px", fontSize: 10,
+                                  fontFamily: mono, lineHeight: "16px", textDecoration: "none",
+                                }}>
+                                ↗
+                              </a>
+                            )}
+                          </span>
                         );
                       })}
                     </div>
