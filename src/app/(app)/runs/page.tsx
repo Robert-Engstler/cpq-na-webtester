@@ -7,10 +7,12 @@ import { C, bodySize, STATUS_CONFIG, thStyle, thClass, tdTop, mono } from "@/lib
 type StepResult = {
   step: string;
   passed: boolean;
+  vin?: string;
   hadManualSpec?: boolean;
   manualSpecs?: string[];
   configId?: string;
   configUrl?: string;
+  pdfDownloaded?: boolean;
   error?: string;
 };
 
@@ -150,6 +152,14 @@ function getConfig(vin: string, steps: StepResult[] | null): { id: string; url?:
   const first = vinSteps.find((s) => s.configId);
   if (first) return { id: first.configId!, url: first.configUrl };
   return null;
+}
+
+function orderPdfMissing(vin: string, steps: StepResult[] | null): boolean {
+  if (!steps) return false;
+  const pdfSteps = steps.filter(
+    (s) => s.vin === vin && /Download (Genuine Care Order Details|Maintenance Agreement) PDF/.test(s.step)
+  );
+  return pdfSteps.length > 0 && pdfSteps.some((s) => s.pdfDownloaded === false);
 }
 
 function Pagination({ page, totalPages, onPrev, onNext }: {
@@ -346,8 +356,10 @@ export default function RunsPage() {
                         if (orderId === "config test only") {
                           return <span key={v} style={{ color: C.muted, fontSize: 10, fontFamily: mono }}>config test only</span>;
                         }
+                        const pdfMissing = orderPdfMissing(v, run.result_json);
                         return (
-                          <span key={v} style={{ color: C.success, fontFamily: mono, fontSize: 11 }}>
+                          <span key={v} style={{ color: pdfMissing ? C.warning : C.success, fontFamily: mono, fontSize: 11 }}
+                            title={pdfMissing ? "Order placed — PDFs not downloaded" : undefined}>
                             {orderId}
                           </span>
                         );
