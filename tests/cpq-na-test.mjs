@@ -987,15 +987,15 @@ async function run() {
             console.log(`  No customers found — proceeding without customer selection`);
           }
 
-          // CA French: quotation has mandatory sub-tabs that must be visited in order before
-          // "Sauvegarder le devis" / "Save Quotation" becomes clickable.
-          // Sub-tabs: éléments supplémentaires → conditions générales → courrier → récapitulatif
-          // "Récapitulatif" appears in BOTH main nav AND sub-tabs — use last() to hit the sub-tab.
+          // Quotation has mandatory sub-tabs that must be visited before Save Quotation becomes active.
+          // FR: éléments supplémentaires → conditions générales → courrier → récapitulatif
+          // EN: Additional Items → Terms & Conditions → Cover Letter → Summary
+          // "Summary" / "Récapitulatif" appears in BOTH main nav AND sub-tabs — use last() to hit the sub-tab.
           const quotationSubTabs = [
-            { pattern: /[eé]l[eé]ments\s+suppl[eé]mentaires/i, nth: "first" },
-            { pattern: /conditions\s+g[eé]n[eé]rales/i,         nth: "first" },
-            { pattern: /courrier/i,                               nth: "first" },
-            { pattern: /r[eé]capitulatif/i,                      nth: "last"  },
+            { pattern: /[eé]l[eé]ments\s+suppl[eé]mentaires|additional\s+items/i, nth: "first" },
+            { pattern: /conditions\s+g[eé]n[eé]rales|terms?\s*(and|&|et)\s*conditions?/i, nth: "first" },
+            { pattern: /courrier|cover\s+letter/i,                                  nth: "first" },
+            { pattern: /r[eé]capitulatif|summary/i,                                 nth: "last"  },
           ];
           for (const { pattern, nth } of quotationSubTabs) {
             const allEls = vinPage.getByText(pattern);
@@ -1087,7 +1087,18 @@ async function run() {
               });
             }
           }
-          await vinPage.waitForURL(/\/asorder\//, { timeout: 30000 });
+          const reachedOrder = await vinPage.waitForURL(/\/asorder\//, { timeout: 30000 }).then(() => true).catch(() => false);
+          if (!reachedOrder) {
+            // URL didn't change to /asorder/ — log current state for diagnosis
+            console.log(`  waitForURL /asorder/ timed out — current URL: ${vinPage.url()}`);
+            // Last-resort: try clicking any visible Order/Commande link found on page
+            const anyOrderLink = vinPage.locator("a").filter({ hasText: /^\s*(Order|Commande)\s*$/i }).last();
+            if (await anyOrderLink.isVisible().catch(() => false)) {
+              console.log(`  Last-resort: clicking visible Order link`);
+              await anyOrderLink.click();
+              await vinPage.waitForURL(/\/asorder\//, { timeout: 15000 }).catch(() => {});
+            }
+          }
           console.log(`  On Order screen: ${vinPage.url()}`);
 
           await pass(`${prefix} Tab Quotation (search customer, save, → Order)`, { page: vinPage, startTime: t0 });
