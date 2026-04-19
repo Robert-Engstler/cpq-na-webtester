@@ -68,8 +68,10 @@ CREATE TABLE IF NOT EXISTS analysis_snapshots (
   failing_steps        JSONB NOT NULL,   -- [{stepName, failureRate, failures, totalRuns}]
   suggestion_text      TEXT NOT NULL,
   status               TEXT NOT NULL DEFAULT 'pending',  -- pending | implementing | verified | dismissed
-  notes                TEXT
+  notes                TEXT,
+  action_items         JSONB  -- [{id, text, status: pending|done|dismissed}]
 );
+ALTER TABLE analysis_snapshots ADD COLUMN IF NOT EXISTS action_items JSONB;
 
 -- Lessons learned: human-curated registry of failure patterns and their fixes (legacy)
 CREATE TABLE IF NOT EXISTS lessons_learned (

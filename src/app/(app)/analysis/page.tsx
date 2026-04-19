@@ -11,6 +11,12 @@ type FailingStepSnap = {
   totalRuns: number;
 };
 
+type ActionItem = {
+  id: string;
+  text: string;
+  status: "pending" | "done" | "dismissed";
+};
+
 type Snapshot = {
   id: string;
   created_at: string;
@@ -20,6 +26,7 @@ type Snapshot = {
   suggestion_text: string;
   status: "pending" | "implementing" | "verified" | "dismissed";
   notes: string | null;
+  action_items: ActionItem[] | null;
 };
 
 const pct = (n: number) => `${(n * 100).toFixed(0)}%`;
@@ -46,6 +53,7 @@ export default function AnalysisPage() {
   const [suggestion, setSuggestion] = useState<string | null>(null);
   const [saving, setSaving]         = useState(false);
   const [saved, setSaved]           = useState(false);
+  const [extracting, setExtracting] = useState(false);
   const [tab, setTab]               = useState<"steps" | "findings">("steps");
 
   const loadAll = useCallback(async () => {
@@ -89,7 +97,7 @@ export default function AnalysisPage() {
       const failingSteps = analysis.steps
         .filter(s => s.failures > 0)
         .map(s => ({ stepName: s.stepName, failureRate: s.failureRate, failures: s.failures, totalRuns: s.totalRuns }));
-      await fetch("/api/analysis/snapshots", {
+      const res = await fetch("/api/analysis/snapshots", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -99,10 +107,23 @@ export default function AnalysisPage() {
           suggestion_text: suggestion,
         }),
       });
+      const snap = await res.json();
       setSaved(true);
-      fetch("/api/analysis/snapshots").then(r => r.json()).then(sr => {
-        if (Array.isArray(sr)) setSnapshots(sr);
-      });
+      setSnapshots(ss => [snap, ...ss]);
+
+      // Auto-extract action items
+      if (snap.id) {
+        setExtracting(true);
+        try {
+          const er = await fetch(`/api/analysis/snapshots/${snap.id}/extract-actions`, { method: "POST" });
+          if (er.ok) {
+            const updated = await er.json();
+            setSnapshots(ss => ss.map(s => s.id === snap.id ? updated : s));
+          }
+        } finally {
+          setExtracting(false);
+        }
+      }
     } finally {
       setSaving(false);
     }
@@ -124,6 +145,14 @@ export default function AnalysisPage() {
     if (!confirm("Delete this analysis snapshot?")) return;
     await fetch(`/api/analysis/snapshots/${id}`, { method: "DELETE" });
     setSnapshots(ss => ss.filter(s => s.id !== id));
+  }
+
+  async function handleExtractActions(id: string) {
+    const res = await fetch(`/api/analysis/snapshots/${id}/extract-actions`, { method: "POST" });
+    if (res.ok) {
+      const updated = await res.json();
+      setSnapshots(ss => ss.map(s => s.id === id ? updated : s));
+    }
   }
 
   const activeFindings = snapshots.filter(s => s.status !== "dismissed").length;
@@ -171,15 +200,15 @@ export default function AnalysisPage() {
           <div style={{ padding: "10px 16px", flexShrink: 0, borderTop: `1px solid ${C.border}`, display: "flex", gap: 8, alignItems: "center" }}>
             <button
               onClick={handleSaveSnapshot}
-              disabled={saving || saved}
+              disabled={saving || saved || extracting}
               style={{
-                fontFamily: mono, fontSize: 11, padding: "4px 10px", borderRadius: 4, cursor: saving || saved ? "default" : "pointer",
-                background: saved ? "rgba(34,197,94,0.1)" : C.accent,
-                border: saved ? `1px solid ${C.success}` : "none",
-                color: saved ? C.success : "#fff",
+                fontFamily: mono, fontSize: 11, padding: "4px 10px", borderRadius: 4, cursor: saving || saved || extracting ? "default" : "pointer",
+                background: saved && !extracting ? "rgba(34,197,94,0.1)" : C.accent,
+                border: saved && !extracting ? `1px solid ${C.success}` : "none",
+                color: saved && !extracting ? C.success : "#fff",
               }}
             >
-              {saved ? "✓ Saved to Findings" : saving ? "Saving…" : "Save to Findings"}
+              {extracting ? "Extracting actions…" : saved ? "✓ Saved to Findings" : saving ? "Saving…" : "Save to Findings"}
             </button>
             <button
               onClick={() => { setSuggestion(null); setSaved(false); }}
@@ -218,6 +247,7 @@ export default function AnalysisPage() {
           currentAnalysis={analysis}
           onUpdate={handleUpdateSnapshot}
           onDelete={handleDeleteSnapshot}
+          onExtractActions={handleExtractActions}
         />
       )}
     </div>
@@ -364,20 +394,35 @@ function StepDetail({ step }: { step: StepStat }) {
   );
 }
 
+const ACTION_STATUS_CYCLE: Record<ActionItem["status"], ActionItem["status"]> = {
+  pending: "done",
+  done: "dismissed",
+  dismissed: "pending",
+};
+
+const ACTION_STATUS_STYLE: Record<ActionItem["status"], { icon: string; color: string }> = {
+  pending:   { icon: "○", color: C.muted },
+  done:      { icon: "✓", color: C.success },
+  dismissed: { icon: "—", color: C.muted },
+};
+
 function FindingsTab({
   snapshots,
   currentAnalysis,
   onUpdate,
   onDelete,
+  onExtractActions,
 }: {
   snapshots: Snapshot[];
   currentAnalysis: AnalysisResult | null;
-  onUpdate: (id: string, patch: { status?: string; notes?: string }) => Promise<void>;
+  onUpdate: (id: string, patch: { status?: string; notes?: string; action_items?: ActionItem[] }) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
+  onExtractActions: (id: string) => Promise<void>;
 }) {
-  const [expanded, setExpanded] = useState<string | null>(null);
+  const [expanded, setExpanded]     = useState<string | null>(null);
   const [editingNotes, setEditingNotes] = useState<Record<string, string>>({});
-  const [savingNotes, setSavingNotes] = useState<Record<string, boolean>>({});
+  const [savingNotes, setSavingNotes]   = useState<Record<string, boolean>>({});
+  const [extracting, setExtracting]     = useState<Record<string, boolean>>({});
 
   const currentlyFailing = new Set(
     currentAnalysis?.steps.filter(s => s.failures > 0).map(s => s.stepName) ?? []
@@ -400,6 +445,19 @@ function FindingsTab({
     setSavingNotes(s => ({ ...s, [id]: false }));
   }
 
+  async function triggerExtract(id: string) {
+    setExtracting(e => ({ ...e, [id]: true }));
+    await onExtractActions(id);
+    setExtracting(e => ({ ...e, [id]: false }));
+  }
+
+  function toggleActionItem(snap: Snapshot, itemId: string) {
+    const items = (snap.action_items ?? []).map(a =>
+      a.id === itemId ? { ...a, status: ACTION_STATUS_CYCLE[a.status] } : a
+    );
+    onUpdate(snap.id, { action_items: items });
+  }
+
   function renderSnapshot(snap: Snapshot) {
     const isExpanded = expanded === snap.id;
     const cfg = SNAP_STATUS[snap.status];
@@ -407,6 +465,10 @@ function FindingsTab({
 
     const stillFailing = snap.failing_steps.filter(fs => currentlyFailing.has(fs.stepName));
     const nowPassing   = snap.failing_steps.filter(fs => !currentlyFailing.has(fs.stepName));
+
+    const items = snap.action_items ?? [];
+    const doneCount    = items.filter(a => a.status === "done").length;
+    const pendingCount = items.filter(a => a.status === "pending").length;
 
     const borderColor =
       snap.status === "verified" && stillFailing.length > 0 ? C.danger :
@@ -431,6 +493,11 @@ function FindingsTab({
               <span style={{ fontSize: 10, padding: "2px 6px", borderRadius: 3, background: "rgba(255,255,255,0.05)", color: cfg.color }}>
                 {cfg.label}
               </span>
+              {items.length > 0 && (
+                <span style={{ fontSize: 10, padding: "2px 6px", borderRadius: 3, background: doneCount === items.length ? "rgba(34,197,94,0.1)" : "rgba(255,255,255,0.05)", color: doneCount === items.length ? C.success : C.secondary }}>
+                  {doneCount}/{items.length} actions done
+                </span>
+              )}
               {snap.status === "verified" && stillFailing.length > 0 && (
                 <span style={{ fontSize: 10, padding: "2px 6px", borderRadius: 3, background: "rgba(239,68,68,0.1)", color: C.danger }}>
                   ⚠ {stillFailing.length} step{stillFailing.length !== 1 ? "s" : ""} still failing
@@ -452,7 +519,7 @@ function FindingsTab({
         {/* Expanded body */}
         {isExpanded && (
           <div style={{ borderTop: `1px solid ${C.border}` }}>
-            {/* Step-by-step cross-check */}
+            {/* Step cross-check chips */}
             <div style={{ padding: "10px 16px", display: "flex", flexWrap: "wrap", gap: 6 }}>
               {snap.failing_steps.map(fs => {
                 const stillFails = currentlyFailing.has(fs.stepName);
@@ -468,14 +535,62 @@ function FindingsTab({
               })}
             </div>
 
-            {/* Suggestion text */}
-            <div style={{
-              margin: "0 16px 12px", background: C.surfaceAlt, borderRadius: 4,
-              padding: "10px 12px", maxHeight: "28vh", overflowY: "auto",
-              fontSize: 11, lineHeight: 1.7, whiteSpace: "pre-wrap", color: C.secondary,
-            }}>
-              {snap.suggestion_text}
+            {/* Action items checklist */}
+            <div style={{ margin: "0 16px 12px", background: C.surfaceAlt, borderRadius: 4, overflow: "hidden" }}>
+              <div style={{ padding: "8px 12px", display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: items.length > 0 ? `1px solid ${C.border}` : "none" }}>
+                <span style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: 0.8 }}>
+                  Action Items{items.length > 0 ? ` — ${doneCount}/${items.length} done · ${pendingCount} pending` : ""}
+                </span>
+                <button
+                  onClick={() => triggerExtract(snap.id)}
+                  disabled={extracting[snap.id]}
+                  style={{ fontFamily: mono, fontSize: 10, padding: "2px 8px", background: "transparent", border: `1px solid ${C.border}`, color: C.muted, borderRadius: 3, cursor: "pointer" }}
+                >
+                  {extracting[snap.id] ? "Extracting…" : items.length > 0 ? "Re-extract" : "Extract Actions"}
+                </button>
+              </div>
+              {items.length > 0 && (
+                <div style={{ padding: "4px 0" }}>
+                  {items.map(item => {
+                    const s = ACTION_STATUS_STYLE[item.status];
+                    return (
+                      <div
+                        key={item.id}
+                        onClick={() => toggleActionItem(snap, item.id)}
+                        style={{
+                          padding: "7px 12px", display: "flex", gap: 10, alignItems: "flex-start",
+                          cursor: "pointer", opacity: item.status === "dismissed" ? 0.45 : 1,
+                        }}
+                        onMouseEnter={e => (e.currentTarget.style.background = C.surfaceHi)}
+                        onMouseLeave={e => (e.currentTarget.style.background = "")}
+                      >
+                        <span style={{ color: s.color, fontWeight: 700, flexShrink: 0, fontSize: 13, lineHeight: "17px" }}>{s.icon}</span>
+                        <span style={{
+                          fontSize: 11, lineHeight: 1.5, color: item.status === "done" ? C.secondary : C.primary,
+                          textDecoration: item.status === "dismissed" ? "line-through" : "none",
+                        }}>
+                          {item.id}. {item.text}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
+
+            {/* Suggestion text (secondary) */}
+            <details style={{ margin: "0 16px 12px" }}>
+              <summary style={{ fontSize: 10, color: C.muted, cursor: "pointer", textTransform: "uppercase", letterSpacing: 0.8, userSelect: "none" }}>
+                Full AI suggestion
+              </summary>
+              <div style={{
+                marginTop: 6, background: C.surfaceAlt, borderRadius: 4,
+                padding: "10px 12px", maxHeight: "24vh", overflowY: "auto",
+                fontSize: 11, lineHeight: 1.7, whiteSpace: "pre-wrap", color: C.secondary,
+              }}>
+                {snap.suggestion_text}
+              </div>
+            </details>
 
             {/* Controls */}
             <div style={{ padding: "12px 16px", display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-end", borderTop: `1px solid ${C.border}` }}>
