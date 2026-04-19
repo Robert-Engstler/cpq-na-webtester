@@ -1015,7 +1015,26 @@ async function run() {
           if (spinnerAppeared) {
             await vinPage.locator(".page-unload-div").waitFor({ state: "hidden", timeout: 20000 }).catch(() => {});
           }
-          await vinPage.waitForTimeout(2000);
+          // Capture any visible notifications/toasts via DOM scan
+          const toastText = await vinPage.evaluate(() => {
+            const results = [];
+            document.querySelectorAll("*").forEach(el => {
+              const cls = (el.className || "").toString().toLowerCase();
+              if (/(toast|alert|notif|snack|message|error|success|warning|info)/.test(cls)) {
+                const txt = el.innerText?.trim();
+                if (txt && txt.length > 2 && txt.length < 300) results.push({ cls: el.className, txt });
+              }
+            });
+            return results;
+          }).catch(() => []);
+          if (toastText.length > 0) console.log(`  DOM notifications after save: ${JSON.stringify(toastText)}`);
+          else console.log(`  No DOM notifications detected after save`);
+          // After save, fr_CA assigns a permanent no-hyphen ID and the URL changes.
+          // Wait for that transition before clicking Order tab, otherwise the app still
+          // sees the draft as unsaved and the Order tab navigates to the new quotation
+          // summary instead of /asorder/.
+          await vinPage.waitForURL(new RegExp(String.raw`/quotation/[a-f0-9]{32}/|asorder`), { timeout: 10000 }).catch(() => {});
+          await vinPage.waitForTimeout(1000);
           console.log(`  Save Quotation done, URL: ${vinPage.url()}`);
 
           // Click "Order" tab in the top navigation.
