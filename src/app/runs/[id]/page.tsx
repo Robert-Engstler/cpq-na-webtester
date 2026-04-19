@@ -11,6 +11,8 @@ type StepResult = {
   manualSpecs?: string[];
   configId?: string;
   configUrl?: string;
+  orderId?: string;
+  orderQueued?: boolean;
   error?: string;
   url?: string;
   durationMs?: number;
@@ -494,6 +496,29 @@ export default function RunDetailPage({
                             <p className="mt-0.5 text-xs break-words" style={{ color: C.danger }}>
                               {step.error}
                             </p>
+                          )}
+                          {step.orderQueued && step.url && (
+                            <div className="mt-1.5 flex items-center gap-2">
+                              <span className="text-xs" style={{ color: C.warning }}>
+                                Order queued — not confirmed after 3 attempts
+                              </span>
+                              <a
+                                href={step.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center px-2 py-0.5 text-xs font-medium"
+                                style={{
+                                  background: "transparent",
+                                  color: C.warning,
+                                  border: `1px solid ${C.warning}`,
+                                  borderRadius: 2,
+                                  textDecoration: "none",
+                                  whiteSpace: "nowrap",
+                                }}
+                              >
+                                Open in CPQ &rarr;
+                              </a>
+                            </div>
                           )}
                           {step.screenshotUrl && (
                             <a

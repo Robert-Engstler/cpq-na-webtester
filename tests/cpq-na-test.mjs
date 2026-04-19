@@ -1149,36 +1149,34 @@ async function run() {
           if (!placeOrderFound) throw new Error("Place Order button not found after 20s");
           await placeOrderBtn.click();
 
-          // After clicking Place Order, CPQ may queue the order.
-          // Success indicator: URL changes from /asorder/UUID to /asorder/NUMERIC (e.g. /asorder/9901357151).
-          // Re-click Place Order up to 3 times if the URL hasn't changed after 30s.
+          // After clicking Place Order, CPQ may queue the order (yellow toast).
+          // Strategy: 3 attempts × 30s wait. Re-click only if button still visible + not already placed.
+          // If still queued after 3 tries → set orderQueued flag, stop gracefully.
           let postOrderText = "";
+          let orderQueued = false;
           for (let attempt = 1; attempt <= 3; attempt++) {
-            // Wait for URL to change to final SAP order ID (99xxxxxxxx format) — this is the definitive success signal.
-            // CPQ first navigates to an intermediate /asorder/NNNN URL before settling on the SAP order number.
-            const urlChanged = await vinPage.waitForURL(/\/asorder\/99\d{5,}/, { timeout: 90000 })
+            const urlChanged = await vinPage.waitForURL(/\/asorder\/99\d{5,}/, { timeout: 30000 })
               .then(() => true).catch(() => false);
             if (urlChanged) {
               console.log(`  Order placed — URL: ${vinPage.url()}`);
               break;
             }
-            // Detect already-placed error before re-clicking — avoids duplicate orders
             const bodyText = await vinPage.locator("body").textContent({ timeout: 3000 }).catch(() => "");
-            if (/d[eé]j[aà] pass[eé]|already placed|already been placed/i.test(bodyText)) {
-              console.log(`  Order already placed — stopping retry`);
-              break;
-            }
-            // URL still has UUID — order is queued or processing. Re-click Place Order.
+            const isAlreadyPlaced = /d[eé]j[aà] pass[eé]|already placed|already been placed/i.test(bodyText);
+            const isQueued = /file d.attente|still in the queue|toujours dans la file/i.test(bodyText);
+            if (isAlreadyPlaced) { console.log(`  Order already placed — stopping retry`); break; }
+            if (isQueued) console.log(`  Yellow toast: quotation still in queue`);
             if (attempt < 3) {
-              const btnStillVisible = await placeOrderBtn.waitFor({ state: "visible", timeout: 5000 }).then(() => true).catch(() => false);
-              if (btnStillVisible) {
-                console.log(`  Order not confirmed after 90s (attempt ${attempt}/3) — button still visible, re-clicking Place Order`);
+              const btnVisible = await placeOrderBtn.waitFor({ state: "visible", timeout: 5000 }).then(() => true).catch(() => false);
+              if (btnVisible) {
+                console.log(`  Attempt ${attempt}/3 — retrying Place Order`);
                 await placeOrderBtn.click();
               } else {
-                console.log(`  Order not confirmed after 90s (attempt ${attempt}/3) — button gone, order processing, waiting longer`);
+                console.log(`  Attempt ${attempt}/3 — button gone, waiting for confirmation`);
               }
             } else {
-              console.log(`  Order not confirmed after 3 attempts`);
+              orderQueued = true;
+              console.log(`  Order still queued after 3 attempts — stopping. Retry from Run Details.`);
             }
           }
           postOrderText = await vinPage.locator("body").textContent({ timeout: 5000 }).catch(() => "");
@@ -1209,7 +1207,7 @@ async function run() {
             orderIdsMap[VIN] = "placed";
           }
 
-          await pass(`${prefix} Place Order`, { page: vinPage, startTime: t0, orderId });
+          await pass(`${prefix} Place Order`, { page: vinPage, startTime: t0, orderId, orderQueued: orderQueued || undefined });
         } catch (err) {
           await fail(`${prefix} Tab Order`, err, { page: vinPage, startTime: t0 });
           overallStatus = "failed";
