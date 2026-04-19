@@ -1149,9 +1149,10 @@ async function run() {
           if (!placeOrderFound) throw new Error("Place Order button not found after 20s");
           await placeOrderBtn.click();
 
-          // After clicking Place Order, CPQ may queue the order (yellow toast).
-          // Strategy: 3 attempts × 30s wait. Re-click only if button still visible + not already placed.
-          // If still queued after 3 tries → set orderQueued flag, stop gracefully.
+          // After clicking Place Order, CPQ may queue the order (yellow toast may appear/disappear).
+          // Success = order ID (99XXXXXXX) found in URL or page text.
+          // Yellow toast is informational only — toast disappearing ≠ order confirmed.
+          // Strategy: 3 attempts × 30s. Re-click if button visible. Stop after 3 with orderQueued flag.
           let postOrderText = "";
           let orderQueued = false;
           for (let attempt = 1; attempt <= 3; attempt++) {
@@ -1161,18 +1162,23 @@ async function run() {
               console.log(`  Order placed — URL: ${vinPage.url()}`);
               break;
             }
+            // URL didn't change — check page text for order ID or status signals
             const bodyText = await vinPage.locator("body").textContent({ timeout: 3000 }).catch(() => "");
-            const isAlreadyPlaced = /d[eé]j[aà] pass[eé]|already placed|already been placed/i.test(bodyText);
+            const bodyOrderId = bodyText.match(/\b(99\d{5,})\b/)?.[1];
+            if (bodyOrderId) {
+              console.log(`  Order ID found in page: ${bodyOrderId}`);
+              break;
+            }
             const isQueued = /file d.attente|still in the queue|toujours dans la file/i.test(bodyText);
-            if (isAlreadyPlaced) { console.log(`  Order already placed — stopping retry`); break; }
             if (isQueued) console.log(`  Yellow toast: quotation still in queue`);
+            else console.log(`  No order confirmation yet (attempt ${attempt}/3)`);
             if (attempt < 3) {
               const btnVisible = await placeOrderBtn.waitFor({ state: "visible", timeout: 5000 }).then(() => true).catch(() => false);
               if (btnVisible) {
-                console.log(`  Attempt ${attempt}/3 — retrying Place Order`);
+                console.log(`  Retrying Place Order (attempt ${attempt + 1}/3)`);
                 await placeOrderBtn.click();
               } else {
-                console.log(`  Attempt ${attempt}/3 — button gone, waiting for confirmation`);
+                console.log(`  Button not visible — waiting for order to confirm`);
               }
             } else {
               orderQueued = true;
