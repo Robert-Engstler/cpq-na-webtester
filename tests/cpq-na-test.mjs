@@ -1156,15 +1156,21 @@ async function run() {
           for (let attempt = 1; attempt <= 3; attempt++) {
             // Wait for URL to change to final SAP order ID (99xxxxxxxx format) — this is the definitive success signal.
             // CPQ first navigates to an intermediate /asorder/NNNN URL before settling on the SAP order number.
-            const urlChanged = await vinPage.waitForURL(/\/asorder\/99\d{5,}/, { timeout: 30000 })
+            const urlChanged = await vinPage.waitForURL(/\/asorder\/99\d{5,}/, { timeout: 90000 })
               .then(() => true).catch(() => false);
             if (urlChanged) {
               console.log(`  Order placed — URL: ${vinPage.url()}`);
               break;
             }
+            // Detect already-placed error before re-clicking — avoids duplicate orders
+            const bodyText = await vinPage.locator("body").textContent({ timeout: 3000 }).catch(() => "");
+            if (/d[eé]j[aà] pass[eé]|already placed|already been placed/i.test(bodyText)) {
+              console.log(`  Order already placed — stopping retry`);
+              break;
+            }
             // URL still has UUID — order is queued or processing. Re-click Place Order.
             if (attempt < 3) {
-              console.log(`  Order not confirmed after 30s (attempt ${attempt}/3) — re-clicking Place Order`);
+              console.log(`  Order not confirmed after 90s (attempt ${attempt}/3) — re-clicking Place Order`);
               const btnVisible = await placeOrderBtn.waitFor({ state: "visible", timeout: 5000 }).then(() => true).catch(() => false);
               if (btnVisible) await placeOrderBtn.click();
             } else {
