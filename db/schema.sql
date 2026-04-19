@@ -58,3 +58,19 @@ CREATE TABLE IF NOT EXISTS test_runs (
 );
 
 -- Auto-delete runs older than 30 days (handled in application layer)
+
+-- Lessons learned: human-curated registry of failure patterns and their fixes
+CREATE TABLE IF NOT EXISTS lessons_learned (
+  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  title        TEXT NOT NULL,
+  step_name    TEXT,            -- normalised step name (without [VIN] prefix), or null = applies to all
+  brand        TEXT,            -- FT | MF | null = all
+  country      TEXT,            -- US | CA | null = all
+  gc_option    TEXT,            -- Standard | Annual | Parts-Only | null = all
+  root_cause   TEXT NOT NULL,
+  fix_applied  TEXT,
+  status       TEXT NOT NULL DEFAULT 'resolved',  -- open | resolved
+  run_id       UUID REFERENCES test_runs(id) ON DELETE SET NULL,
+  created_at   TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  resolved_at  TIMESTAMP WITH TIME ZONE
+);

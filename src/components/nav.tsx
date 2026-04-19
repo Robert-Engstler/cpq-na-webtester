@@ -7,7 +7,8 @@ import { AppSettingsModal } from "@/components/AppSettingsModal";
 
 const links = [
   { href: "/scenarios", label: "Scenarios" },
-  { href: "/runs", label: "Runs" },
+  { href: "/runs",      label: "Runs" },
+  { href: "/analysis",  label: "Analysis" },
 ];
 
 export function Nav({ environment }: { environment?: string }) {

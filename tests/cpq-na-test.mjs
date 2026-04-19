@@ -81,11 +81,31 @@ console.log(`Stage endpoint: ${STAGE_ENDPOINT}  |  SVC preset: ${SVC_PRESET}  | 
 const results = [];
 const orderIdsMap = {}; // VIN -> order ID or "config test only"
 
+// Per-VIN context injected automatically into every pass/fail result.
+// Set via setStepCtx() at the start of each VIN iteration.
+let _stepCtx = {};
+let _stepIndex = 0;
+function setStepCtx(vin, gcOption) {
+  _stepCtx = { vin, gcOption };
+  _stepIndex = 0;
+}
+
+function categorizeError(err) {
+  const msg = String(err).toLowerCase();
+  if (/timeout/i.test(msg))                                    return "timeout";
+  if (/locator|element|selector|found|visible|attached/i.test(msg)) return "element_not_found";
+  if (/navigation|net::|failed to load|ERR_/i.test(msg))      return "navigation";
+  if (/range|invalid|validation|requis|required/i.test(msg))  return "validation";
+  if (/permission|access|denied|security/i.test(msg))         return "permission";
+  return "other";
+}
+
 async function pass(step, extra = {}) {
   const { page, startTime, ...rest } = extra;
   const url = page ? page.url() : undefined;
   const durationMs = startTime != null ? Date.now() - startTime : undefined;
-  const result = { step, passed: true, ...rest };
+  const stepIndex = ++_stepIndex;
+  const result = { step, passed: true, stepIndex, ..._stepCtx, ...rest };
   if (url !== undefined) result.url = url;
   if (durationMs !== undefined) result.durationMs = durationMs;
   results.push(result);
@@ -98,7 +118,9 @@ async function fail(step, err, extra = {}) {
   const url = page ? page.url() : undefined;
   const durationMs = startTime != null ? Date.now() - startTime : undefined;
   const screenshotUrl = page ? await screenshotToBlob(page, step) : null;
-  const result = { step, passed: false, error: String(err) };
+  const stepIndex = ++_stepIndex;
+  const errorCategory = categorizeError(err);
+  const result = { step, passed: false, stepIndex, ..._stepCtx, error: String(err), errorCategory };
   if (url !== undefined) result.url = url;
   if (durationMs !== undefined) result.durationMs = durationMs;
   if (screenshotUrl) result.screenshotUrl = screenshotUrl;
@@ -314,6 +336,9 @@ async function run() {
   let t0;
 
   try {
+    // Global steps (login, cookies) run before the VIN loop — use a shared context
+    setStepCtx("_global", "_global");
+
     // ── 1. Login (once for all VINs) ──────────────────────────────────────────
     t0 = Date.now();
     try {
@@ -348,6 +373,7 @@ async function run() {
       const vinAnnualDuration = (gcOption === "Annual" && svcOverride) ? svcOverride : ANNUAL_DURATION;
       const vinSvcPreset = (gcOption !== "Annual" && svcOverride) ? svcOverride : SVC_PRESET;
       const prefix = `[${VIN}]`;
+      setStepCtx(VIN, gcOption);
       console.log(`\n── Processing ${VIN} (${gcOption}) ──`);
 
       const vinPage = page; // reuse authenticated tab

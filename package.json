@@ -12,6 +12,7 @@
     "s": "node scripts/update-summary.mjs"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.90.0",
     "@vercel/postgres": "^0.10.0",
     "jose": "^6.1.3",
     "next": "16.1.6",
