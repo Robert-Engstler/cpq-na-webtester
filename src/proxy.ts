@@ -53,7 +53,7 @@ export async function proxy(request: NextRequest) {
 
   const ip = getClientIp(request);
   if (!isAllowed(ip)) {
-    return new NextResponse("Yeah, not allowed for you :-)", { status: 403 });
+    return new NextResponse("Chuck Norris once got a 403. The server apologized. You won't get the same courtesy.", { status: 403 });
   }
 
   if (PUBLIC_PATHS.some((p) => pathname.startsWith(p))) {
