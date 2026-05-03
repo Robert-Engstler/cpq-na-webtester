@@ -21,6 +21,7 @@ function ipMatches(ip: string, entry: string): boolean {
 }
 
 function isAllowed(ip: string): boolean {
+  if (!ip || ip === "127.0.0.1" || ip === "::1") return true; // local dev
   const raw = process.env.ALLOWED_IPS ?? "";
   if (!raw.trim()) return true; // no allowlist configured → open
   const entries = raw.split(",").map((s) => s.trim()).filter(Boolean);

@@ -494,7 +494,7 @@ export default function RunDetailPage({
             <div className="flex-1 min-h-0 overflow-auto" style={{ border: `1px solid ${C.border}` }}>
               <table className="w-full" style={{ fontSize: bodySize }}>
                 <thead className="sticky top-0 z-10">
-                  <tr style={{ background: C.surfaceHi, borderBottom: `1px solid ${C.border}` }}>
+                  <tr style={{ background: C.surface, borderBottom: `1px solid ${C.border}` }}>
                     <th className={thClass} style={{ ...thStyle, width: 100 }}>Step</th>
                     <th className={`${thClass} w-10`} style={thStyle}>Result</th>
                     <th className={thClass} style={{ ...thStyle, width: 70 }}>Duration</th>
@@ -509,8 +509,8 @@ export default function RunDetailPage({
                       <tr
                         key={i}
                         style={{
-                          background: i % 2 === 0 ? C.surface : C.surfaceAlt,
-                          borderBottom: `1px solid ${C.surfaceHi}`,
+                          background: i % 2 === 0 ? C.bg : C.surfaceAlt,
+                          borderBottom: `1px solid ${C.border}`,
                         }}
                       >
                         <td
@@ -587,7 +587,7 @@ export default function RunDetailPage({
                                       onChange={e => setOrderIdInput(s => ({ ...s, [vin]: e.target.value }))}
                                       className="text-xs px-2 py-0.5"
                                       style={{
-                                        background: "#1a1a1a",
+                                        background: C.inputBg,
                                         border: `1px solid ${C.border}`,
                                         color: C.primary,
                                         borderRadius: 2,

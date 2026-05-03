@@ -228,15 +228,15 @@ export default function ScenariosPage() {
 
   const inputBase: React.CSSProperties = {
     background: C.inputBg, border: `1px solid ${C.inputBdr}`,
-    color: C.secondary, borderRadius: 2, fontSize: bodySize, fontFamily: mono,
+    color: C.primary, borderRadius: 4, fontSize: bodySize, fontFamily: mono,
   };
 
   return (
     <main
       className="flex flex-col px-6 py-4 overflow-hidden"
-      style={{ height: "calc(100vh - 49px)", maxWidth: 1200, background: C.bg, color: C.secondary, fontSize: bodySize }}
+      style={{ height: "calc(100vh - 48px)", maxWidth: 1200, background: C.bg, color: C.primary, fontSize: bodySize }}
     >
-      <h1 className="mb-1 text-2xl font-bold tracking-tight flex-shrink-0" style={{ color: C.primary }}>
+      <h1 className="mb-1 text-xl font-bold tracking-tight flex-shrink-0" style={{ color: C.primary, letterSpacing: "-0.02em" }}>
         CPQ NA Runner
       </h1>
       <p className="mb-4 flex-shrink-0" style={{ color: C.secondary, fontSize: 11, lineHeight: 1.5, maxWidth: 900 }}>
@@ -247,8 +247,8 @@ export default function ScenariosPage() {
       </p>
 
       {/* Create form */}
-      <div className="mb-4 p-4 flex-shrink-0" style={{ background: C.surface, border: `1px solid ${C.border}` }}>
-        <h2 className="mb-4 text-[10px] font-semibold uppercase tracking-wider" style={{ color: C.secondary }}>
+      <div className="mb-4 p-4 flex-shrink-0" style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8 }}>
+        <h2 className="mb-4 text-[10px] font-semibold uppercase tracking-wider" style={{ color: C.muted }}>
           Add Scenario
         </h2>
         <form onSubmit={handleCreate} style={{ display: "flex", alignItems: "flex-start", gap: 20 }}>
@@ -394,7 +394,7 @@ export default function ScenariosPage() {
       ) : scenarios.length === 0 ? (
         <p style={{ color: C.muted }}>No scenarios yet. Add one above to get started.</p>
       ) : (
-        <div className="flex-1 min-h-0" style={{ border: `1px solid ${C.border}`, overflow: "hidden" }}>
+        <div className="flex-1 min-h-0" style={{ border: `1px solid ${C.border}`, overflow: "hidden", borderRadius: 8 }}>
           <table className="w-full" style={{ fontSize: bodySize }}>
             <colgroup>
               <col style={{ width: 90 }} />
@@ -404,7 +404,7 @@ export default function ScenariosPage() {
               <col style={{ width: 180 }} />
             </colgroup>
             <thead>
-              <tr style={{ background: C.surfaceHi, borderBottom: `1px solid ${C.border}` }}>
+              <tr style={{ background: C.surface, borderBottom: `1px solid ${C.border}` }}>
                 <th className={thClass} style={thStyle}>ID</th>
                 <th className={thClass} style={thStyle}>Description</th>
                 <th className={thClass} style={thStyle}>VINs / Genuine Care</th>
@@ -417,16 +417,16 @@ export default function ScenariosPage() {
                 <tr
                   key={s.id}
                   style={{
-                    background: i % 2 === 0 ? C.surface : C.surfaceAlt,
-                    borderBottom: `1px solid ${C.surfaceHi}`,
+                    background: i % 2 === 0 ? C.bg : C.surfaceAlt,
+                    borderBottom: `1px solid ${C.border}`,
                   }}
                 >
-                  <td className="px-4 py-3" style={{ ...tdTop, color: C.muted }}>{fmtS(s.id)}</td>
-                  <td className="px-4 py-3 font-medium" style={{ ...tdTop, color: C.secondary }}>{s.name}</td>
+                  <td className="px-4 py-3" style={{ ...tdTop, color: C.muted, fontFamily: mono, fontSize: 11 }}>{fmtS(s.id)}</td>
+                  <td className="px-4 py-3 font-medium" style={{ ...tdTop, color: C.primary }}>{s.name}</td>
                   <td className="px-4 py-3" style={tdTop}>
                     <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                       {s.vins.map((v, idx) => (
-                        <div key={v} style={{ display: "flex", gap: 8, alignItems: "baseline" }}>
+                        <div key={idx} style={{ display: "flex", gap: 8, alignItems: "baseline" }}>
                           <span style={{ color: C.secondary, fontFamily: mono }}>{v}</span>
                           <span style={{
                             color: C.muted, fontSize: 10,
@@ -450,7 +450,7 @@ export default function ScenariosPage() {
                       ))}
                     </div>
                   </td>
-                  <td className="px-4 py-3" style={{ ...tdTop, color: C.secondary }}>{fmtDate(s.created_at)}</td>
+                  <td className="px-4 py-3" style={{ ...tdTop, color: C.secondary, fontSize: 12 }}>{fmtDate(s.created_at)}</td>
                   <td className="px-4 py-3" style={tdTop}>
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8 }}>
                       {runError?.id === s.id && (

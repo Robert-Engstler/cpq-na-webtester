@@ -98,15 +98,15 @@ export function AppSettingsModal({ environment }: { environment?: string }) {
         ref={overlayRef}
         onClick={(e) => { if (e.target === overlayRef.current) handleClose(); }}
         style={{
-          position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)",
+          position: "fixed", inset: 0, background: "rgba(0,0,0,0.3)",
           zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center",
         }}
       >
         <div
           style={{
-            background: C.surface, border: `1px solid ${C.border}`,
-            borderRadius: 8, padding: 24, width: 420,
-            fontFamily: mono,
+            background: C.bg, border: `1px solid ${C.border}`,
+            borderRadius: 10, padding: 24, width: 420,
+            fontFamily: mono, boxShadow: "0 8px 40px rgba(0,0,0,0.12)",
           }}
         >
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>

@@ -1,15 +1,15 @@
 @import "tailwindcss";
 
 :root {
-  --background: #0d0d0d;
-  --foreground: #999999;
+  --background: #ffffff;
+  --foreground: #111827;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-inter);
+  --font-mono: var(--font-jetbrains-mono);
 }
 
 html, body {
@@ -19,11 +19,16 @@ html, body {
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-inter), 'Inter', sans-serif;
   font-size: 13px;
 }
 
 @keyframes fill-lr {
   0%   { transform: translateX(-100%); }
   100% { transform: translateX(100%); }
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.25; }
 }

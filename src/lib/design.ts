@@ -1,34 +1,40 @@
-/* ─── Design Tokens (dark monospace theme) ─────────────────────── */
+/* ─── Design Tokens (Cloud Light theme) ─────────────────────── */
 
 export const C = {
-  bg:         "#0d0d0d",
-  surface:    "#1a1a1a",
-  surfaceAlt: "#141414",
-  surfaceHi:  "#222222",
-  border:     "#2a2a2a",
-  inputBg:    "#1e1e1e",
-  inputBdr:   "#333333",
-  muted:      "#666666",
-  secondary:  "#999999",
-  primary:    "#e5e5e5",
-  accent:     "#3b82f6",
-  success:    "#22c55e",
-  danger:     "#ef4444",
-  warning:    "#f59e0b",
-  pending:    "#6b7280",
+  bg:          "#ffffff",
+  surface:     "#f6f8fa",
+  surfaceAlt:  "#fafafa",
+  surfaceHi:   "#f0f2f5",
+  border:      "#e5e7eb",
+  inputBg:     "#ffffff",
+  inputBdr:    "#d1d5db",
+  muted:       "#9ca3af",
+  secondary:   "#6b7280",
+  primary:     "#111827",
+  accent:      "#2563eb",
+  accentBg:    "#dbeafe",
+  success:     "#16a34a",
+  successBg:   "#dcfce7",
+  danger:      "#dc2626",
+  dangerBg:    "#fee2e2",
+  warning:     "#d97706",
+  warningBg:   "#fef3c7",
+  pending:     "#9ca3af",
+  pendingBg:   "#f3f4f6",
 };
 
 export const mono = "'JetBrains Mono', monospace";
+export const sans = "var(--font-inter), 'Inter', sans-serif";
 export const bodySize = 13;
 
 export const STATUS_CONFIG: Record<
   string,
   { color: string; bg: string; border: string }
 > = {
-  pending:  { color: C.pending, bg: "rgba(107,114,128,0.1)", border: C.pending },
-  complete: { color: C.success, bg: "rgba(34,197,94,0.1)",   border: C.success },
-  failed:   { color: C.danger,  bg: "rgba(239,68,68,0.1)",   border: C.danger },
-  stopped:  { color: C.warning, bg: "rgba(245,158,11,0.1)",  border: C.warning },
+  pending:  { color: C.accent,   bg: C.accentBg,   border: C.accent },
+  complete: { color: C.success,  bg: C.successBg,  border: C.success },
+  failed:   { color: C.danger,   bg: C.dangerBg,   border: C.danger },
+  stopped:  { color: C.warning,  bg: C.warningBg,  border: C.warning },
 };
 
 export const VIN_COLORS = {
@@ -41,6 +47,6 @@ export const VIN_COLORS = {
 export type VinColorKey = keyof typeof VIN_COLORS;
 
 /** Shared table header style */
-export const thStyle: React.CSSProperties = { color: C.secondary };
-export const thClass = "px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-wider";
+export const thStyle: React.CSSProperties = { color: C.muted };
+export const thClass = "px-3 py-2 text-left text-[10px] font-bold uppercase tracking-wider";
 export const tdTop: React.CSSProperties = { verticalAlign: "top" };
